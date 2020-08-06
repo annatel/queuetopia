@@ -2,11 +2,11 @@ defmodule Queuetopia do
   @moduledoc """
   Defines a queues machine.
 
-  A Queuetopia can manage multiple ordered blocking queue.
+  A Queuetopia can manage multiple ordered blocking queues.
   All the queues share only the same scheduler and the poll interval.
   They are completely independant from each other.
 
-  A Queuetopia expects a performer to exists.
+  A Queuetopia expects a performer to exist.
   For example, the performer can be implemented like this:
 
       defmodule MyApp.MailQueue.Performer do
@@ -41,7 +41,7 @@ defmodule Queuetopia do
 
   ## Examples
 
-    iex> MyApp.MailQueue.create_job("mails_queue_1", "send_mail", %{email_address: "toto@mail.com", body: "Welcome"}, [timeout: 1_000, max_backoff: 60_000])
+      iex> MyApp.MailQueue.create_job("mails_queue_1", "send_mail", %{email_address: "toto@mail.com", body: "Welcome"}, [timeout: 1_000, max_backoff: 60_000])
 
   """
   @callback create_job(binary(), binary(), map(), [Job.option()]) ::
