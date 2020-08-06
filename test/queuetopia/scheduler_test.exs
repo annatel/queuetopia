@@ -27,7 +27,7 @@ defmodule Queuetopia.SchedulerTest do
 
     assert_receive :ok, 150
 
-    # :sys.get_state(TestQueuetopia.Scheduler)
+    :sys.get_state(TestQueuetopia.Scheduler)
   end
 
   test "poll only queues of its scope" do
@@ -80,7 +80,7 @@ defmodule Queuetopia.SchedulerTest do
         scope: scope
       )
 
-    assert_receive :started, 50
+    assert_receive :started, 80
 
     lock = TestRepo.get_by(Lock, queue: queue, scope: scope)
     assert %Lock{id: id} = lock
@@ -115,7 +115,7 @@ defmodule Queuetopia.SchedulerTest do
     assert %Lock{id: id_1} = lock
     assert %Job{error: nil} = TestRepo.get!(Job, id)
 
-    refute_receive :ok, 1_000
+    refute_receive :ok, 1_500
     lock = TestRepo.get_by(Lock, queue: queue, scope: scope)
     assert %Lock{id: ^id_1} = lock
     assert %Job{error: "timeout"} = TestRepo.get!(Job, id)
