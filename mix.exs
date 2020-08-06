@@ -37,8 +37,7 @@ defmodule Queuetopia.MixProject do
       {:ecto_sql, "~> 3.4"},
       {:myxql, "~> 0.4.0", only: :test},
       {:jason, "~> 1.0"},
-      {:antl_utils, git: "git@github.com:annatel/antl_utils.git", tag: "0.3.0"},
-      {:datetime_utils, git: "git@gitlab.annatel.net:mvno/datetime_utils.git", tag: "0.3.0"},
+      {:antl_utils, git: "https://github.com/annatel/antl_utils.git", tag: "0.4.1"},
       {:ex_machina, "~> 2.4", only: :test},
       {:mox, "~> 0.5", only: :test}
     ]
