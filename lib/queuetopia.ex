@@ -9,7 +9,7 @@ defmodule Queuetopia do
   A Queuetopia expects a performer to exists.
   For example, the performer can be implemented like this:
 
-    defmodule MyApp.MailQueue.Performer do
+      defmodule MyApp.MailQueue.Performer do
         @behaviour Queuetopia.Jobs.Performer
 
         @impl true
@@ -22,11 +22,11 @@ defmodule Queuetopia do
 
   And the Queuetopia:
 
-    defmodule MyApp.MailQueue do
-      use Queuetopia,
-        repo: MyApp.Repo,
-        performer: MyApp.MailQueue.Performer
-    end
+      defmodule MyApp.MailQueue do
+        use Queuetopia,
+          repo: MyApp.Repo,
+          performer: MyApp.MailQueue.Performer
+      end
   """
 
   @doc """
