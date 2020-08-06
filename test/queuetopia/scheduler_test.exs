@@ -115,7 +115,7 @@ defmodule Queuetopia.SchedulerTest do
     assert %Lock{id: id_1} = lock
     assert %Job{error: nil} = TestRepo.get!(Job, id)
 
-    refute_receive :ok, 1_500
+    refute_receive :ok, 1_000
     lock = TestRepo.get_by(Lock, queue: queue, scope: scope)
     assert %Lock{id: ^id_1} = lock
     assert %Job{error: "timeout"} = TestRepo.get!(Job, id)
