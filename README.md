@@ -59,6 +59,7 @@ defmodule MyApp.Repo.Migrations.CreateQueuetopiaTables do
     Queuetopia.Migrations.V1.down
   end
 end
+```
 
 Now, run the migration to create the table:
 
