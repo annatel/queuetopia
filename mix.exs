@@ -39,7 +39,8 @@ defmodule Queuetopia.MixProject do
       {:jason, "~> 1.0"},
       {:antl_utils, "~> 0.4.1"},
       {:ex_machina, "~> 2.4", only: :test},
-      {:mox, "~> 0.5", only: :test}
+      {:mox, "~> 0.5", only: :test},
+      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false}
     ]
   end
 
