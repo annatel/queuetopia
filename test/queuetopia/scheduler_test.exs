@@ -56,7 +56,7 @@ defmodule Queuetopia.SchedulerTest do
         timeout: 5_000
       )
 
-    assert_receive :started, 50
+    assert_receive :started, 70
 
     %Job{done_at: done_at} = TestRepo.get!(Job, id)
     assert is_nil(done_at)
