@@ -67,7 +67,7 @@ defmodule Queuetopia.Migrations.V1 do
       add(:attempted_at, :utc_datetime, null: true)
       add(:attempted_by, :string, null: true)
       add(:done_at, :utc_datetime, null: true)
-      add(:error, :string, null: true)
+      add(:error, :text, null: true)
 
       timestamps()
     end
