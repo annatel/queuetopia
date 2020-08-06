@@ -62,7 +62,7 @@ end
 
 Now, run the migration to create the table:
 
-```bash
+```sh
 mix ecto.migrate
 ```
 
