@@ -4,7 +4,7 @@ defmodule Queuetopia.MixProject do
   def project do
     [
       app: :queuetopia,
-      version: "0.1.1",
+      version: "0.1.2",
       elixir: "~> 1.9",
       start_permanent: Mix.env() == :prod,
       package: package(),
@@ -37,7 +37,7 @@ defmodule Queuetopia.MixProject do
       {:ecto_sql, "~> 3.4"},
       {:myxql, "~> 0.4.0", only: :test},
       {:jason, "~> 1.0"},
-      {:antl_utils, git: "https://github.com/annatel/antl_utils.git", tag: "0.4.1"},
+      {:antl_utils, "~> 0.4.1"},
       {:ex_machina, "~> 2.4", only: :test},
       {:mox, "~> 0.5", only: :test}
     ]
