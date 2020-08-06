@@ -23,7 +23,7 @@ defmodule Queuetopia.SchedulerTest do
 
     TestRepo.delete(lock)
 
-    assert_receive :started, 50
+    assert_receive :started, 80
 
     assert_receive :ok, 150
 
