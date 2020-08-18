@@ -1,7 +1,5 @@
 defmodule Queuetopia.Sequences do
-  @moduledoc """
-  The Sequences context.
-  """
+  @moduledoc false
 
   def next(:queuetopia_sequences, repo) do
     Ecto.Adapters.SQL.query!(

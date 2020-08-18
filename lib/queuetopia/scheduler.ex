@@ -1,8 +1,6 @@
 defmodule Queuetopia.Scheduler do
   @moduledoc """
   The Queuetopia scheduler, polling with a defined interval the next available queues.
-
-
   """
   use GenServer
 
