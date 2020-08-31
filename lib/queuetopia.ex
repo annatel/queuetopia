@@ -46,6 +46,8 @@ defmodule Queuetopia do
   """
   @callback create_job(binary(), binary(), map(), [Job.option()]) ::
               {:error, Ecto.Changeset.t()} | {:ok, Job.t()}
+  @callback create_job(binary(), binary(), map()) :: {:error, Ecto.Changeset.t()} | {:ok, Job.t()}
+  @optional_callbacks create_job: 3, create_job: 4
 
   defmacro __using__(opts) do
     quote bind_quoted: [opts: opts] do
