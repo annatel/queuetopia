@@ -71,10 +71,15 @@ defmodule Queuetopia do
       @spec start_link([option()]) :: Supervisor.on_start()
       def start_link(opts \\ []) do
         poll_interval = Keyword.get(opts, :poll_interval, @default_poll_interval)
+        repoll_after_job_performed? = Keyword.get(opts, :repoll_after_job_performed?, false)
 
         Supervisor.start_link(
           __MODULE__,
-          [repo: @repo, poll_interval: poll_interval],
+          [
+            repo: @repo,
+            poll_interval: poll_interval,
+            repoll_after_job_performed?: repoll_after_job_performed?
+          ],
           name: __MODULE__
         )
       end
@@ -88,6 +93,7 @@ defmodule Queuetopia do
              name: child_name("Scheduler"),
              task_supervisor_name: child_name("TaskSupervisor"),
              repo: Keyword.fetch!(args, :repo),
+             repoll_after_job_performed?: Keyword.fetch!(args, :repoll_after_job_performed?),
              scope: @scope,
              poll_interval: Keyword.fetch!(args, :poll_interval)
            ]}

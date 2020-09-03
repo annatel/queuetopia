@@ -7,12 +7,8 @@ defmodule Queuetopia.SchedulerTest do
   alias Queuetopia.TestRepo
   alias Queuetopia.TestQueuetopia
 
-  setup do
-    start_supervised!({TestQueuetopia, [poll_interval: 50]})
-    :ok
-  end
-
   test "poll only available queues" do
+    start_supervised!({TestQueuetopia, [poll_interval: 50]})
     scope = TestQueuetopia.scope()
 
     %Job{queue: queue} = Factory.insert(:slow_job, params: %{"duration" => 100}, scope: scope)
@@ -26,11 +22,10 @@ defmodule Queuetopia.SchedulerTest do
     assert_receive :started, 80
 
     assert_receive :ok, 150
-
-    :sys.get_state(TestQueuetopia.Scheduler)
   end
 
   test "poll only queues of its scope" do
+    start_supervised!({TestQueuetopia, [poll_interval: 50]})
     scope = TestQueuetopia.scope()
 
     %Job{scope: scope_2} = Factory.insert(:slow_job, params: %{"duration" => 100})
@@ -42,11 +37,10 @@ defmodule Queuetopia.SchedulerTest do
     refute_receive :started, 50
 
     refute_receive :started, 50
-
-    :sys.get_state(TestQueuetopia.Scheduler)
   end
 
   test "let a long job finish while the timeout is not reached" do
+    start_supervised!({TestQueuetopia, [poll_interval: 50]})
     scope = TestQueuetopia.scope()
 
     %Job{id: id} =
@@ -71,6 +65,7 @@ defmodule Queuetopia.SchedulerTest do
   end
 
   test "locks the queue during job processing" do
+    start_supervised!({TestQueuetopia, [poll_interval: 50]})
     scope = TestQueuetopia.scope()
 
     %Job{queue: queue} =
@@ -99,7 +94,8 @@ defmodule Queuetopia.SchedulerTest do
     :sys.get_state(TestQueuetopia.Scheduler)
   end
 
-  test "keeps the lock on the queue a while after the job timeouts" do
+  test "keeps the lock on the queue a while (one second) after the job timeouts" do
+    start_supervised!({TestQueuetopia, [poll_interval: 50]})
     scope = TestQueuetopia.scope()
 
     %Job{id: id, queue: queue} =
@@ -128,6 +124,11 @@ defmodule Queuetopia.SchedulerTest do
   end
 
   describe "isolation" do
+    setup do
+      start_supervised!({TestQueuetopia, [poll_interval: 50]})
+      :ok
+    end
+
     test "a slow queue don't slow down the others" do
       scope = TestQueuetopia.scope()
 
@@ -247,7 +248,12 @@ defmodule Queuetopia.SchedulerTest do
   end
 
   describe "retry" do
-    test "an failed job will be retried" do
+    setup do
+      start_supervised!({TestQueuetopia, [poll_interval: 50]})
+      :ok
+    end
+
+    test "a failed job will be retried" do
       scope = TestQueuetopia.scope()
 
       %{id: id, queue: queue} = Factory.insert(:failure_job, scope: scope)
@@ -315,6 +321,11 @@ defmodule Queuetopia.SchedulerTest do
   end
 
   describe "failure persistence" do
+    setup do
+      start_supervised!({TestQueuetopia, [poll_interval: 50]})
+      :ok
+    end
+
     test "a failed job persists the failure error and set the attempt attributes" do
       scope = TestQueuetopia.scope()
 
@@ -398,6 +409,49 @@ defmodule Queuetopia.SchedulerTest do
       assert attempted_by == Atom.to_string(Node.self())
 
       :sys.get_state(TestQueuetopia.Scheduler)
+    end
+  end
+
+  describe "repoll_after_job_performed?" do
+    test "after a job succeeded" do
+      start_supervised!(
+        {TestQueuetopia, [poll_interval: 1_000, repoll_after_job_performed?: true]}
+      )
+
+      scope = TestQueuetopia.scope()
+
+      %{queue: queue} = Factory.insert(:success_job, scope: scope)
+      _ = Factory.insert(:success_job, scope: scope, queue: queue)
+
+      assert_receive :ok, 800
+
+      assert_receive :ok, 800
+    end
+
+    test "after a job failed" do
+      start_supervised!(
+        {TestQueuetopia, [poll_interval: 1_000, repoll_after_job_performed?: true]}
+      )
+
+      scope = TestQueuetopia.scope()
+
+      Factory.insert(:failure_job, scope: scope)
+
+      assert_receive :fail, 800
+      assert_receive :fail, 800
+    end
+
+    test "after a job raised don't repoll" do
+      start_supervised!(
+        {TestQueuetopia, [poll_interval: 1_000, repoll_after_job_performed?: true]}
+      )
+
+      scope = TestQueuetopia.scope()
+
+      Factory.insert(:raising_job, scope: scope)
+
+      assert_receive :raise, 800
+      refute_receive :raise, 800
     end
   end
 end
