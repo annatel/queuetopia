@@ -402,9 +402,7 @@ defmodule Queuetopia.SchedulerTest do
 
   describe "repoll_after_job_performed?" do
     test "after a job succeeded" do
-      start_supervised!(
-        {TestQueuetopia, [poll_interval: 1_000, repoll_after_job_performed?: true]}
-      )
+      start_supervised!({TestQueuetopia, [poll_interval: 500, repoll_after_job_performed?: true]})
 
       scope = TestQueuetopia.scope()
 
@@ -417,9 +415,7 @@ defmodule Queuetopia.SchedulerTest do
     end
 
     test "after a job failed" do
-      start_supervised!(
-        {TestQueuetopia, [poll_interval: 1_000, repoll_after_job_performed?: true]}
-      )
+      start_supervised!({TestQueuetopia, [poll_interval: 500, repoll_after_job_performed?: true]})
 
       scope = TestQueuetopia.scope()
 
