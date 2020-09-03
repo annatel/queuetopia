@@ -95,7 +95,6 @@ defmodule Queuetopia.SchedulerTest do
   end
 
   test "keeps the lock on the queue a while (one second) after the job timeouts" do
-    start_supervised!({TestQueuetopia, [poll_interval: 500]})
     scope = TestQueuetopia.scope()
 
     %Job{} =
@@ -104,6 +103,8 @@ defmodule Queuetopia.SchedulerTest do
         timeout: 2_000,
         scope: scope
       )
+
+    start_supervised!({TestQueuetopia, [poll_interval: 500]})
 
     assert_receive :started, 500
     assert_receive :timeout, 3_000
