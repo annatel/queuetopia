@@ -21,7 +21,10 @@ defmodule Queuetopia.TestPerfomer do
         send(pid, :started)
         %{"duration" => duration} = job.params
 
+        Process.send_after(pid, :timeout, job.timeout)
+
         :ok = Process.sleep(duration)
+
         send(pid, :ok)
 
         :ok

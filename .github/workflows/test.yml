@@ -49,7 +49,7 @@ jobs:
       - name: Run Tests
         run: |
           source env/ci.env
-          mix test
+          mix test --trace
 
       - name: Code coverage
         run: |

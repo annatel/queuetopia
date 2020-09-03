@@ -95,32 +95,20 @@ defmodule Queuetopia.SchedulerTest do
   end
 
   test "keeps the lock on the queue a while (one second) after the job timeouts" do
-    start_supervised!({TestQueuetopia, [poll_interval: 50]})
+    start_supervised!({TestQueuetopia, [poll_interval: 500]})
     scope = TestQueuetopia.scope()
 
-    %Job{id: id, queue: queue} =
+    %Job{} =
       Factory.insert(:slow_job,
-        params: %{"duration" => 1_500},
-        timeout: 1_000,
-        max_backoff: 4_000,
+        params: %{"duration" => 5_000},
+        timeout: 2_000,
         scope: scope
       )
 
     assert_receive :started, 500
-    lock = TestRepo.get_by(Lock, queue: queue, scope: scope)
-    assert %Lock{id: id_1} = lock
-    assert %Job{error: nil} = TestRepo.get!(Job, id)
-
-    refute_receive :ok, 1_000
-    lock = TestRepo.get_by(Lock, queue: queue, scope: scope)
-    assert %Lock{id: ^id_1} = lock
-    assert %Job{error: "timeout"} = TestRepo.get!(Job, id)
-
-    refute_receive :toto, 1_000
-
-    assert is_nil(TestRepo.get_by(Lock, queue: queue, scope: scope))
-
-    :sys.get_state(TestQueuetopia.Scheduler)
+    assert_receive :timeout, 3_000
+    refute_receive :started, 500
+    assert_receive :started, 2_000
   end
 
   describe "isolation" do
@@ -423,9 +411,9 @@ defmodule Queuetopia.SchedulerTest do
       %{queue: queue} = Factory.insert(:success_job, scope: scope)
       _ = Factory.insert(:success_job, scope: scope, queue: queue)
 
-      assert_receive :ok, 800
+      assert_receive :ok, 1_000
 
-      assert_receive :ok, 800
+      assert_receive :ok, 1_000
     end
 
     test "after a job failed" do
@@ -437,21 +425,8 @@ defmodule Queuetopia.SchedulerTest do
 
       Factory.insert(:failure_job, scope: scope)
 
-      assert_receive :fail, 800
-      assert_receive :fail, 800
-    end
-
-    test "after a job raised don't repoll" do
-      start_supervised!(
-        {TestQueuetopia, [poll_interval: 1_000, repoll_after_job_performed?: true]}
-      )
-
-      scope = TestQueuetopia.scope()
-
-      Factory.insert(:raising_job, scope: scope)
-
-      assert_receive :raise, 800
-      refute_receive :raise, 800
+      assert_receive :fail, 1_000
+      assert_receive :fail, 1_000
     end
   end
 end
