@@ -15,6 +15,9 @@ A persistant blocking job queue built with Ecto.
 
 - **Persistence** — Jobs are stored in a DB and updated after each execution attempt.
 
+- **Performance** — At each poll, only one job per queue is run. Optionnaly, jobs can
+  avoid waiting unnecessarily. The performed job triggers an other polling.
+
 - **Isolated Queues** — Jobs are stored in a single table but are executed in
   distinct queues. Each queue runs in isolation, ensuring that a job in a single
   slow queue can't back up other faster queues and that a failing job in a queue
@@ -32,7 +35,7 @@ by adding `queuetopia` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:queuetopia, "~> 0.1.2"}
+    {:queuetopia, "~> 0.2.0"}
   ]
 end
 ```
