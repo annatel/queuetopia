@@ -97,7 +97,7 @@ defmodule Queuetopia.Scheduler do
       |> Enum.into(%{})
       |> Map.merge(jobs)
 
-    if(continue_polling?) do
+    if continue_polling? do
       Process.send_after(self(), {:poll, continue_polling?: true}, poll_interval)
     end
 
