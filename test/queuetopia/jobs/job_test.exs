@@ -214,6 +214,22 @@ defmodule Queuetopia.Jobs.JobTest do
       assert %{done_at: ["can't be blank"]} = errors_on(changeset)
     end
 
+    test "nillifies error field" do
+      job = Factory.insert(:job, error: "error")
+
+      params =
+        Factory.params_for(:job,
+          attempts: 6,
+          attempted_at: Factory.utc_datetime(),
+          attempted_by: Atom.to_string(Node.self()),
+          done_at: Factory.utc_datetime()
+        )
+
+      changeset = Job.succeeded_job_changeset(job, params)
+
+      assert is_nil(changeset.changes.error)
+    end
+
     test "when params are valid, return a valid changeset" do
       utc_datetime = Factory.utc_datetime()
       job = Factory.insert(:job)

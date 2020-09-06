@@ -1,6 +1,6 @@
 defmodule Queuetopia.Jobs.Job do
   use Ecto.Schema
-  import Ecto.Changeset, only: [cast: 3, validate_number: 3, validate_required: 2]
+  import Ecto.Changeset, only: [cast: 3, put_change: 3, validate_number: 3, validate_required: 2]
 
   @type t :: %__MODULE__{}
   @type option ::
@@ -84,6 +84,7 @@ defmodule Queuetopia.Jobs.Job do
     |> cast(attrs, [:attempts, :attempted_at, :attempted_by, :done_at])
     |> validate_required_attempt_attributes
     |> validate_required([:done_at])
+    |> put_change(:error, nil)
   end
 
   defp validate_required_attempt_attributes(changeset) do
