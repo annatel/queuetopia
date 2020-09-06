@@ -17,7 +17,7 @@ defmodule Queuetopia.Scheduler do
   @impl true
   @spec init([option()]) :: {:ok, map()}
   def init(opts) do
-    Process.send(self(), :poll, [])
+    Process.send(self(), {:poll, continue_polling?: true}, [])
 
     state = %{
       repo: Keyword.get(opts, :repo),
@@ -32,7 +32,7 @@ defmodule Queuetopia.Scheduler do
   end
 
   @impl true
-  def handle_info(:poll, state) do
+  def handle_info({:poll, continue_polling?: continue_polling?}, state) do
     %{
       task_supervisor_name: task_supervisor_name,
       poll_interval: poll_interval,
@@ -41,7 +41,7 @@ defmodule Queuetopia.Scheduler do
       jobs: jobs
     } = state
 
-    jobs = poll_queues(task_supervisor_name, poll_interval, repo, scope, jobs)
+    jobs = poll_queues(task_supervisor_name, poll_interval, repo, scope, jobs, continue_polling?)
     {:noreply, %{state | jobs: jobs}}
   end
 
@@ -76,7 +76,7 @@ defmodule Queuetopia.Scheduler do
     Locks.unlock_queue(repo, scope, job.queue)
 
     if state.repoll_after_job_performed?,
-      do: Process.send(self(), :poll, [])
+      do: Process.send(self(), {:poll, continue_polling?: false}, [])
 
     {:noreply, %{state | jobs: Map.delete(jobs, ref)}}
   end
@@ -87,7 +87,7 @@ defmodule Queuetopia.Scheduler do
     end
   end
 
-  defp poll_queues(task_supervisor_name, poll_interval, repo, scope, jobs) do
+  defp poll_queues(task_supervisor_name, poll_interval, repo, scope, jobs, continue_polling?) do
     Locks.release_expired_locks(repo, scope)
 
     jobs =
@@ -97,7 +97,9 @@ defmodule Queuetopia.Scheduler do
       |> Enum.into(%{})
       |> Map.merge(jobs)
 
-    Process.send_after(self(), :poll, poll_interval)
+    if continue_polling? do
+      Process.send_after(self(), {:poll, continue_polling?: true}, poll_interval)
+    end
 
     jobs
   end
