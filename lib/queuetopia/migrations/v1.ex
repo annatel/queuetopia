@@ -23,6 +23,14 @@ defmodule Queuetopia.Migrations.V1 do
     end
 
     create_index_if_not_exists(:queuetopia_sequences, [:sequence])
+
+    utc_now = DateTime.utc_now() |> DateTime.to_naive()
+
+    repo().query!(
+      "INSERT into queuetopia_sequences(`sequence`, `inserted_at`, `updated_at`) VALUE (0, '#{
+        utc_now
+      }', '#{utc_now}');"
+    )
   end
 
   defp drop_sequences_table do
