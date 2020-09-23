@@ -36,7 +36,7 @@ by adding `queuetopia` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:queuetopia, "~> 0.5.1"}
+    {:queuetopia, "~> 0.6.0"}
   ]
 end
 ```
