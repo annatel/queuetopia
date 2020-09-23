@@ -6,7 +6,7 @@ defmodule Queuetopia.Jobs do
   alias Queuetopia.Locks
   alias Queuetopia.Locks.Lock
   alias Queuetopia.Jobs.Job
-  alias AntlUtils.Elixir.Math
+  alias AntlUtilsElixir.Math
 
   @doc """
   List the available pending queues by scope a.k.a by Queuetopia.

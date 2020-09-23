@@ -1,5 +1,7 @@
 # Queuetopia
 
+[![GitHub Workflow Status](https://img.shields.io/github/workflow/status/annatel/queuetopia/CI?cacheSeconds=3600&style=flat-square)](https://github.com/annatel/queuetopia/actions) [![GitHub issues](https://img.shields.io/github/issues-raw/annatel/queuetopia?style=flat-square&cacheSeconds=3600)](https://github.com/annatel/queuetopia/issues) [![License](https://img.shields.io/badge/license-MIT-brightgreen.svg?cacheSeconds=3600?style=flat-square)](http://opensource.org/licenses/MIT) [![Hex.pm](https://img.shields.io/hexpm/v/queuetopia?style=flat-square)](https://hex.pm/packages/queuetopia) [![Hex.pm](https://img.shields.io/hexpm/dt/queuetopia?style=flat-square)](https://hex.pm/packages/queuetopia)
+
 A persistant blocking job queue built with Ecto.
 
 #### Features
@@ -25,7 +27,6 @@ A persistant blocking job queue built with Ecto.
 
 - **Handle Node Duplication** — Queues are locked, preventing two nodes to perform
   the same job at the same time.
-
 
 ## Installation
 
