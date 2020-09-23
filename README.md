@@ -30,13 +30,13 @@ A persistant blocking job queue built with Ecto.
 
 ## Installation
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `queuetopia` to your list of dependencies in `mix.exs`:
+Queuetopia is published on [Hex](https://hex.pm/packages/queuetopia).  
+The package can be installed by adding `queuetopia` to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
   [
-    {:queuetopia, "~> 0.5.1"}
+    {:queuetopia, "~> 0.6.0"}
   ]
 end
 ```

@@ -4,7 +4,7 @@ defmodule Queuetopia.MixProject do
   def project do
     [
       app: :queuetopia,
-      version: "0.5.1",
+      version: "0.6.0",
       elixir: "~> 1.9",
       start_permanent: Mix.env() == :prod,
       package: package(),
@@ -17,7 +17,7 @@ defmodule Queuetopia.MixProject do
 
   defp package() do
     [
-      licenses: ["Apache-2.0"],
+      licenses: ["MIT"],
       links: %{"GitHub" => "https://github.com/annatel/queuetopia"}
     ]
   end
