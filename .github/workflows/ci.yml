@@ -1,9 +1,9 @@
-on: [push]
 name: CI
+on: [push, pull_request]
 
 jobs:
-  test:
-    name: Test
+  mix_test:
+    name: mix test (Elixir ${{ matrix.elixir }} OTP ${{ matrix.otp }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
