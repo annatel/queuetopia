@@ -3,7 +3,6 @@ defmodule Queuetopia.Factory do
 
   alias Queuetopia.Jobs.Job
   alias Queuetopia.Locks.Lock
-  alias Queuetopia.Sequences.Sequence
 
   @job_performer Queuetopia.TestPerfomer
 
@@ -15,12 +14,6 @@ defmodule Queuetopia.Factory do
   @spec utc_datetime :: DateTime.t()
   def utc_datetime() do
     DateTime.from_naive!(~N[2018-12-19T00:00:00Z], "Etc/UTC")
-  end
-
-  def sequence_factory do
-    %Sequence{
-      sequence: 0
-    }
   end
 
   @spec lock_factory :: Queuetopia.Locks.Lock.t()
