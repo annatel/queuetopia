@@ -6,26 +6,28 @@ A persistant blocking job queue built with Ecto.
 
 #### Features
 
-- **Persistence** — Jobs are stored in a DB and updated after each execution attempt.
+- Persistence — Jobs are stored in a DB and updated after each execution attempt.
 
-- **Blocking** — A failing job blocks its queue until it is done.
+- Blocking — A failing job blocks its queue until it is done.
 
-- **Dynamicity** — Queues are dynamically defined. Once the first job is created
+- Dynamicity — Queues are dynamically defined. Once the first job is created
   for the queue, the queue exists.
 
-- **Retries** — Failed jobs are retried with a configurable backoff.
+- Reactivity — Immediatly try to execute a job that has just been created.
 
-- **Persistence** — Jobs are stored in a DB and updated after each execution attempt.
+- Retries — Failed jobs are retried with a configurable backoff.
 
-- **Performance** — At each poll, only one job per queue is run. Optionnaly, jobs can
+- Persistence — Jobs are stored in a DB and updated after each execution attempt.
+
+- Performance — At each poll, only one job per queue is run. Optionnaly, jobs can
   avoid waiting unnecessarily. The performed job triggers an other polling.
 
-- **Isolated Queues** — Jobs are stored in a single table but are executed in
+- Isolated Queues — Jobs are stored in a single table but are executed in
   distinct queues. Each queue runs in isolation, ensuring that a job in a single
   slow queue can't back up other faster queues and that a failing job in a queue
   don't block other queues.
 
-- **Handle Node Duplication** — Queues are locked, preventing two nodes to perform
+- Handle Node Duplication — Queues are locked, preventing two nodes to perform
   the same job at the same time.
 
 ## Installation
@@ -36,7 +38,7 @@ The package can be installed by adding `queuetopia` to your list of dependencies
 ```elixir
 def deps do
   [
-    {:queuetopia, "~> 0.6.0"}
+    {:queuetopia, "~> 0.6.1"}
   ]
 end
 ```
