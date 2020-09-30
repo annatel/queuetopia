@@ -434,7 +434,7 @@ defmodule Queuetopia.SchedulerTest do
   end
 
   test "send_poll/1 sends the poll messages, only if the process inbox is empty" do
-    start_supervised!({TestQueuetopia, [poll_interval: 500]})
+    start_supervised!({TestQueuetopia, [poll_interval: 5_000]})
 
     scheduler_pid = Process.whereis(TestQueuetopia.Scheduler)
 
