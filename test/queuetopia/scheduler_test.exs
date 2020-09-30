@@ -432,4 +432,25 @@ defmodule Queuetopia.SchedulerTest do
       assert_receive :fail, 1_000
     end
   end
+
+  test "send_poll/1 sends the poll messages, only if the process inbox is empty" do
+    start_supervised!({TestQueuetopia, [poll_interval: 500]})
+
+    scheduler_pid = Process.whereis(TestQueuetopia.Scheduler)
+
+    {:messages, messages} = Process.info(scheduler_pid, :messages)
+    assert length(messages) == 0
+
+    Queuetopia.Scheduler.send_poll(scheduler_pid)
+
+    {:messages, messages} = Process.info(scheduler_pid, :messages)
+    assert length(messages) == 1
+
+    Queuetopia.Scheduler.send_poll(scheduler_pid)
+
+    {:messages, messages} = Process.info(scheduler_pid, :messages)
+    assert length(messages) == 1
+
+    :sys.get_state(TestQueuetopia.Scheduler)
+  end
 end

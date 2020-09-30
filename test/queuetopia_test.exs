@@ -50,7 +50,7 @@ defmodule QueuetopiaTest do
                )
     end
 
-    test "when timing options are not set, take the default job timing options" do
+    test "when timing options are not set, takes the default job timing options" do
       timeout = Job.default_timeout()
       max_backoff = Job.default_max_backoff()
       max_attempts = Job.default_max_attempts()
@@ -63,6 +63,19 @@ defmodule QueuetopiaTest do
                 max_backoff: ^max_backoff,
                 max_attempts: ^max_attempts
               }} = TestQueuetopia_2.create_job(queue, action, params)
+    end
+
+    test "when the queue is running and the job succeeds, sends a poll request to the scheduler" do
+      next_poll_in = 5_000
+
+      start_supervised!({Queuetopia.TestQueuetopia, [poll_interval: next_poll_in]})
+
+      %{queue: queue, action: action, params: params} = Factory.params_for(:success_job)
+
+      assert {:ok, %Job{id: id, performer: performer, scope: scope}} =
+               TestQueuetopia.create_job(queue, action, params)
+
+      assert_receive :ok, 1_000
     end
   end
 end

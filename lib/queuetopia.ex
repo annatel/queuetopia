@@ -87,11 +87,11 @@ defmodule Queuetopia do
       @impl true
       def init(args) do
         children = [
-          {Task.Supervisor, name: child_name("TaskSupervisor")},
+          {Task.Supervisor, name: task_supervisor()},
           {Queuetopia.Scheduler,
            [
-             name: child_name("Scheduler"),
-             task_supervisor_name: child_name("TaskSupervisor"),
+             name: scheduler(),
+             task_supervisor_name: task_supervisor(),
              repo: Keyword.fetch!(args, :repo),
              repoll_after_job_performed?: Keyword.fetch!(args, :repoll_after_job_performed?),
              scope: @scope,
@@ -109,7 +109,23 @@ defmodule Queuetopia do
       @spec create_job(binary(), binary(), map(), [Job.option()]) ::
               {:error, Ecto.Changeset.t()} | {:ok, Job.t()}
       def create_job(queue, action, params, opts \\ []) do
-        Queuetopia.Jobs.create_job(@repo, @performer, @scope, queue, action, params, opts)
+        result =
+          Queuetopia.Jobs.create_job(@repo, @performer, @scope, queue, action, params, opts)
+
+        with {:ok, %Job{}} <- result,
+             scheduler_pid when is_pid(scheduler_pid) <- Process.whereis(scheduler()) do
+          Queuetopia.Scheduler.send_poll(scheduler_pid)
+        end
+
+        result
+      end
+
+      defp scheduler() do
+        child_name("Scheduler")
+      end
+
+      defp task_supervisor() do
+        child_name("TaskSupervisor")
       end
 
       def repo() do
