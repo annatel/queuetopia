@@ -15,12 +15,12 @@ defmodule Queuetopia.Scheduler do
   end
 
   def send_poll(scheduler_pid) when is_pid(scheduler_pid) do
-    unless has_poll_messages(scheduler_pid) do
+    unless has_poll_messages?(scheduler_pid) do
       Process.send(scheduler_pid, {:poll, continue_polling?: false}, [])
     end
   end
 
-  defp has_poll_messages(scheduler_pid) do
+  defp has_poll_messages?(scheduler_pid) do
     {:messages, messages} = Process.info(scheduler_pid, :messages)
 
     Enum.any?(messages, &match?({:poll, _}, &1))
