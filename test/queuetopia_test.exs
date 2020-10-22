@@ -78,4 +78,27 @@ defmodule QueuetopiaTest do
       assert_receive :ok, 1_000
     end
   end
+
+  describe "send_poll/0" do
+    test "when the scheduler is up, no matter if the process inbox is empty or not returns :ok" do
+      next_poll_in = 5_000
+
+      start_supervised!({Queuetopia.TestQueuetopia, [poll_interval: next_poll_in]})
+
+      scheduler_pid = Process.whereis(TestQueuetopia.Scheduler)
+
+      assert :ok = TestQueuetopia.send_poll()
+
+      {:messages, messages} = Process.info(scheduler_pid, :messages)
+      assert length(messages) == 1
+
+      assert :ok = TestQueuetopia.send_poll()
+
+      :sys.get_state(TestQueuetopia.Scheduler)
+    end
+
+    test "when the scheduler is down, returns nill" do
+      assert nil == TestQueuetopia.send_poll()
+    end
+  end
 end
