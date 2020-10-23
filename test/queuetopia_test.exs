@@ -97,8 +97,8 @@ defmodule QueuetopiaTest do
       :sys.get_state(TestQueuetopia.Scheduler)
     end
 
-    test "when the scheduler is down, returns nill" do
-      assert nil == TestQueuetopia.send_poll()
+    test "when the scheduler is down, returns an error tuple" do
+      assert {:error, "scheduler down"} == TestQueuetopia.send_poll()
     end
   end
 end

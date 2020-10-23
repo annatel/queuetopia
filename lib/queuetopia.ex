@@ -112,22 +112,21 @@ defmodule Queuetopia do
         result =
           Queuetopia.Jobs.create_job(@repo, @performer, @scope, queue, action, params, opts)
 
-        case result do
-          {:ok, %Job{}} ->
-            send_poll()
-
-            result
-
-          _ ->
-            result
+        with {:ok, %Job{}} <- result do
+          send_poll()
         end
+
+        result
       end
 
       def send_poll() do
-        with scheduler_pid when is_pid(scheduler_pid) <- Process.whereis(scheduler()) do
-          Queuetopia.Scheduler.send_poll(scheduler_pid)
+        scheduler_pid = Process.whereis(scheduler())
 
+        if is_pid(scheduler_pid) do
+          Queuetopia.Scheduler.send_poll(scheduler_pid)
           :ok
+        else
+          {:error, "scheduler down"}
         end
       end
 
