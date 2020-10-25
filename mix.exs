@@ -1,24 +1,21 @@
 defmodule Queuetopia.MixProject do
   use Mix.Project
 
+  @source_url "https://github.com/annatel/queuetopia"
+  @version "0.6.2"
+
   def project do
     [
       app: :queuetopia,
-      version: "0.6.1",
+      version: @version,
       elixir: "~> 1.9",
       start_permanent: Mix.env() == :prod,
       package: package(),
       description: description(),
       deps: deps(),
       elixirc_paths: elixirc_paths(Mix.env()),
-      aliases: aliases()
-    ]
-  end
-
-  defp package() do
-    [
-      licenses: ["MIT"],
-      links: %{"GitHub" => "https://github.com/annatel/queuetopia"}
+      aliases: aliases(),
+      docs: docs()
     ]
   end
 
@@ -50,6 +47,23 @@ defmodule Queuetopia.MixProject do
   defp aliases do
     [
       test: ["ecto.create --quiet", "ecto.migrate", "test"]
+    ]
+  end
+
+  defp package() do
+    [
+      licenses: ["MIT"],
+      links: %{"GitHub" => @source_url}
+    ]
+  end
+
+  defp docs do
+    [
+      main: "readme",
+      source_url: @source_url,
+      extras: [
+        "README.md"
+      ]
     ]
   end
 end
