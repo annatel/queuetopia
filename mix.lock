@@ -1,5 +1,5 @@
 %{
-  "antl_utils_elixir": {:hex, :antl_utils_elixir, "0.1.0", "323324df149754dde5cdc0e81a711a0a6dd63395d2a07ac48b15855426ca6a16", [:mix], [], "hexpm", "3405c5a2865e52b7a9194291ef0ca3042d3da188021b546fc47cb3697a91aec5"},
+  "antl_utils_elixir": {:hex, :antl_utils_elixir, "0.2.0", "6456044a1c8d4dfbec020d4f7af3fb3dd7d73f7c19f5c533ce0abec0488bbb82", [:mix], [], "hexpm", "01cbfb5be4d1bc39db4232e4556409425f5a623e2f8cf4168fcf58934c23c314"},
   "connection": {:hex, :connection, "1.0.4", "a1cae72211f0eef17705aaededacac3eb30e6625b04a6117c1b2db6ace7d5976", [:mix], [], "hexpm", "4a0850c9be22a43af9920a71ab17c051f5f7d45c209e40269a1938832510e4d9"},
   "db_connection": {:hex, :db_connection, "2.2.2", "3bbca41b199e1598245b716248964926303b5d4609ff065125ce98bcd368939e", [:mix], [{:connection, "~> 1.0.2", [hex: :connection, repo: "hexpm", optional: false]}], "hexpm", "642af240d8a8affb93b4ba5a6fcd2bbcbdc327e1a524b825d383711536f8070c"},
   "decimal": {:hex, :decimal, "1.9.0", "83e8daf59631d632b171faabafb4a9f4242c514b0a06ba3df493951c08f64d07", [:mix], [], "hexpm", "b1f2343568eed6928f3e751cf2dffde95bfaa19dd95d09e8a9ea92ccfd6f7d85"},

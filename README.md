@@ -146,6 +146,12 @@ MyApp.MailQueue.create_job("mails_queue_1", "send_mail", %{email_address: "toto@
 
 So, the mails_queue_1 was born and you can add it other jobs as we do above.
 
+You can wake up the scheduler to run the next pending jobs by calling the `send_poll/0` function.
+
+```elixir
+MyApp.MailQueue.send_poll()
+```
+
 ### One DB, many Queuetopia
 
 Multiple Queuetopia can coexist in your project, e.g your project may own its Queuetopia and uses a library
