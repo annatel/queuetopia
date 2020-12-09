@@ -30,7 +30,7 @@ defmodule Queuetopia.JobsTest do
       _ = Factory.insert(:lock, queue: queue, scope: scope_1)
 
       assert [] = Jobs.list_available_pending_queues(TestRepo, scope_1)
-      assert [queue] = Jobs.list_available_pending_queues(TestRepo, scope_2)
+      assert [^queue] = Jobs.list_available_pending_queues(TestRepo, scope_2)
     end
   end
 
@@ -77,7 +77,8 @@ defmodule Queuetopia.JobsTest do
       assert %Lock{locked_until: locked_until, locked_at: locked_at} =
                TestRepo.get_by(Lock, scope: scope, queue: queue)
 
-      assert locked_until = DateTime.add(locked_at, 1_000, :second)
+      assert locked_until ==
+               locked_at |> DateTime.add(2_000, :millisecond) |> DateTime.truncate(:second)
     end
 
     test "when the queue is already locked" do

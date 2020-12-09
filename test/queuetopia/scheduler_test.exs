@@ -7,13 +7,17 @@ defmodule Queuetopia.SchedulerTest do
   alias Queuetopia.TestRepo
   alias Queuetopia.TestQueuetopia
 
+  setup do
+    Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 50)
+  end
+
   test "poll only available queues" do
     scope = TestQueuetopia.scope()
 
     %Job{queue: queue} = Factory.insert(:slow_job, params: %{"duration" => 100}, scope: scope)
     lock = Factory.insert(:lock, scope: scope, queue: queue)
 
-    start_supervised!({TestQueuetopia, [poll_interval: 50]})
+    start_supervised!(TestQueuetopia)
 
     refute_receive :started, 50
 
@@ -30,7 +34,7 @@ defmodule Queuetopia.SchedulerTest do
 
     assert scope != scope_2
 
-    start_supervised!({TestQueuetopia, [poll_interval: 50]})
+    start_supervised!(TestQueuetopia)
 
     refute_receive :started, 50
     refute_receive :started, 50
@@ -47,7 +51,7 @@ defmodule Queuetopia.SchedulerTest do
         timeout: 5_000
       )
 
-    start_supervised!({TestQueuetopia, [poll_interval: 50]})
+    start_supervised!(TestQueuetopia)
 
     assert_receive :started, 70
 
@@ -73,7 +77,7 @@ defmodule Queuetopia.SchedulerTest do
         scope: scope
       )
 
-    start_supervised!({TestQueuetopia, [poll_interval: 50]})
+    start_supervised!(TestQueuetopia)
 
     assert_receive :started, 80
 
@@ -104,7 +108,8 @@ defmodule Queuetopia.SchedulerTest do
         scope: scope
       )
 
-    start_supervised!({TestQueuetopia, [poll_interval: 500]})
+    Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 500)
+    start_supervised!(TestQueuetopia)
 
     assert_receive :started, 500
     assert_receive :timeout, 3_000
@@ -119,7 +124,7 @@ defmodule Queuetopia.SchedulerTest do
       %{queue: fast_queue} = Factory.insert(:success_job)
       _ = Factory.insert(:success_job, scope: scope, queue: fast_queue)
 
-      start_supervised!({TestQueuetopia, [poll_interval: 50]})
+      start_supervised!(TestQueuetopia)
 
       assert_receive :ok, 200
 
@@ -156,7 +161,7 @@ defmodule Queuetopia.SchedulerTest do
 
       %{queue: other_queue} = Factory.insert(:success_job, scope: scope)
 
-      start_supervised!({TestQueuetopia, [poll_interval: 50]})
+      start_supervised!(TestQueuetopia)
 
       assert_receive :ok, 200
       assert_receive :fail, 200
@@ -191,7 +196,7 @@ defmodule Queuetopia.SchedulerTest do
 
       %{queue: other_queue} = Factory.insert(:success_job, scope: scope)
 
-      start_supervised!({TestQueuetopia, [poll_interval: 50]})
+      start_supervised!(TestQueuetopia)
 
       assert_receive :ok, 200
       assert_receive :started, 200
@@ -218,7 +223,7 @@ defmodule Queuetopia.SchedulerTest do
 
       %{queue: success_queue} = Factory.insert(:success_job, scope: scope)
 
-      start_supervised!({TestQueuetopia, [poll_interval: 50]})
+      start_supervised!(TestQueuetopia)
 
       assert_receive :ok, 200
       assert_receive :raise, 200
@@ -246,7 +251,7 @@ defmodule Queuetopia.SchedulerTest do
 
       %{id: id, queue: queue} = Factory.insert(:failure_job, scope: scope)
 
-      start_supervised!({TestQueuetopia, [poll_interval: 50]})
+      start_supervised!(TestQueuetopia)
 
       assert_receive :fail, 200
       refute_receive :toto, 50
@@ -275,7 +280,7 @@ defmodule Queuetopia.SchedulerTest do
           scope: scope
         )
 
-      start_supervised!({TestQueuetopia, [poll_interval: 50]})
+      start_supervised!(TestQueuetopia)
 
       assert_receive :started, 200
       refute_receive :ok, 300
@@ -296,7 +301,7 @@ defmodule Queuetopia.SchedulerTest do
 
       %{id: id, queue: queue} = Factory.insert(:raising_job, scope: scope, timeout: 50)
 
-      start_supervised!({TestQueuetopia, [poll_interval: 50]})
+      start_supervised!(TestQueuetopia)
 
       assert_receive :raise, 200
       refute_receive :toto, 50
@@ -320,7 +325,7 @@ defmodule Queuetopia.SchedulerTest do
 
       %{id: id, queue: queue} = Factory.insert(:failure_job, scope: scope)
 
-      start_supervised!({TestQueuetopia, [poll_interval: 50]})
+      start_supervised!(TestQueuetopia)
 
       assert_receive :fail, 100
       refute_receive :toto, 50
@@ -351,7 +356,7 @@ defmodule Queuetopia.SchedulerTest do
           scope: scope
         )
 
-      start_supervised!({TestQueuetopia, [poll_interval: 50]})
+      start_supervised!(TestQueuetopia)
 
       assert_receive :started, 100
       refute_receive :toto, 200
@@ -385,7 +390,7 @@ defmodule Queuetopia.SchedulerTest do
         error: nil
       } = Factory.insert(:raising_job, scope: scope)
 
-      start_supervised!({TestQueuetopia, [poll_interval: 50]})
+      start_supervised!(TestQueuetopia)
 
       assert_receive :raise, 100
       refute_receive :toto, 50
@@ -414,7 +419,12 @@ defmodule Queuetopia.SchedulerTest do
       %{queue: queue} = Factory.insert(:success_job, scope: scope)
       _ = Factory.insert(:success_job, scope: scope, queue: queue)
 
-      start_supervised!({TestQueuetopia, [poll_interval: 500, repoll_after_job_performed?: true]})
+      Application.put_env(:queuetopia, TestQueuetopia,
+        poll_interval: 500,
+        repoll_after_job_performed?: true
+      )
+
+      start_supervised!(TestQueuetopia)
 
       assert_receive :ok, 1_000
 
@@ -426,7 +436,12 @@ defmodule Queuetopia.SchedulerTest do
 
       Factory.insert(:failure_job, scope: scope)
 
-      start_supervised!({TestQueuetopia, [poll_interval: 500, repoll_after_job_performed?: true]})
+      Application.put_env(:queuetopia, TestQueuetopia,
+        poll_interval: 500,
+        repoll_after_job_performed?: true
+      )
+
+      start_supervised!(TestQueuetopia)
 
       assert_receive :fail, 1_000
       assert_receive :fail, 1_000
@@ -434,7 +449,9 @@ defmodule Queuetopia.SchedulerTest do
   end
 
   test "send_poll/1 sends the poll messages, only if the process inbox is empty" do
-    start_supervised!({TestQueuetopia, [poll_interval: 5_000]})
+    Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 5_000)
+
+    start_supervised!(TestQueuetopia)
 
     scheduler_pid = Process.whereis(TestQueuetopia.Scheduler)
 
