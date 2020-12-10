@@ -38,7 +38,7 @@ The package can be installed by adding `queuetopia` to your list of dependencies
 ```elixir
 def deps do
   [
-    {:queuetopia, "~> 0.6.1"}
+    {:queuetopia, "~> 1.0.0"}
   ]
 end
 ```
@@ -117,7 +117,7 @@ defmodule MyApp do
 
   def start(_type, _args) do
     children = [
-      {MyApp.MailQueue, [[polling_interval: 1_000]]}
+      MyApp.MailQueue
     ]
     Supervisor.start_link(children, strategy: :one_for_one)
   end
@@ -127,7 +127,18 @@ end
 Or, it can be started directly like this:
 
 ```elixir
-MyApp.MailQueue.start_link([poll_interval: 1_000])
+MyApp.MailQueue.start_link()
+```
+
+The configuration can be set as below:
+
+```elixir
+ # config/config.exs
+  config :my_app, MyApp.MailQueue,
+    poll_interval: 60 * 1_000,
+    repoll_after_job_performed?: true,
+    disable?: true
+
 ```
 
 Note that the polling interval is optionnal.
