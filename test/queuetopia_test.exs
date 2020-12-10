@@ -3,12 +3,24 @@ defmodule QueuetopiaTest do
   alias Queuetopia.{TestQueuetopia, TestQueuetopia_2}
   alias Queuetopia.Jobs.Job
 
+  setup do
+    Application.put_env(:queuetopia, TestQueuetopia, disable?: false)
+    :ok
+  end
+
   test "multiple instances can coexist" do
     start_supervised!(Queuetopia.TestQueuetopia)
     start_supervised!(Queuetopia.TestQueuetopia_2)
 
     :sys.get_state(Queuetopia.TestQueuetopia.Scheduler)
     :sys.get_state(Queuetopia.TestQueuetopia_2.Scheduler)
+  end
+
+  test "disable? option" do
+    Application.put_env(:queuetopia, TestQueuetopia, disable?: true)
+    start_supervised!(Queuetopia.TestQueuetopia)
+
+    assert is_nil(Process.whereis(Queuetopia.TestQueuetopia.Scheduler))
   end
 
   describe "create_job/4" do
@@ -66,24 +78,23 @@ defmodule QueuetopiaTest do
     end
 
     test "when the queue is running and the job succeeds, sends a poll request to the scheduler" do
-      next_poll_in = 5_000
-
-      start_supervised!({Queuetopia.TestQueuetopia, [poll_interval: next_poll_in]})
+      Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 5_000)
+      start_supervised!(TestQueuetopia)
 
       %{queue: queue, action: action, params: params} = Factory.params_for(:success_job)
 
-      assert {:ok, %Job{id: id, performer: performer, scope: scope}} =
-               TestQueuetopia.create_job(queue, action, params)
+      assert {:ok, %Job{}} = TestQueuetopia.create_job(queue, action, params)
 
       assert_receive :ok, 1_000
+
+      :sys.get_state(TestQueuetopia.Scheduler)
     end
   end
 
   describe "send_poll/0" do
-    test "when the scheduler is up, no matter if the process inbox is empty or not returns :ok" do
-      next_poll_in = 5_000
-
-      start_supervised!({Queuetopia.TestQueuetopia, [poll_interval: next_poll_in]})
+    test "sends a poll message to the scheduler" do
+      Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 5_000)
+      start_supervised!(TestQueuetopia)
 
       scheduler_pid = Process.whereis(TestQueuetopia.Scheduler)
 
@@ -93,6 +104,7 @@ defmodule QueuetopiaTest do
       assert length(messages) == 1
 
       assert :ok = TestQueuetopia.send_poll()
+      assert length(messages) == 1
 
       :sys.get_state(TestQueuetopia.Scheduler)
     end

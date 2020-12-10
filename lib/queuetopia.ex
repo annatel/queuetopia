@@ -24,9 +24,17 @@ defmodule Queuetopia do
 
       defmodule MyApp.MailQueue do
         use Queuetopia,
-          repo: MyApp.Repo,
-          performer: MyApp.MailQueue.Performer
+          otp_app: :my_app,
+          performer: MyApp.MailQueue.Performer,
+          repo: MyApp.Repo
       end
+
+      # config/config.exs
+      config :my_app, MyApp.MailQueue,
+        poll_interval: 60 * 1_000,
+        repoll_after_job_performed?: true,
+        disable?: true
+
   """
 
   @doc """
@@ -52,17 +60,21 @@ defmodule Queuetopia do
       @behaviour Queuetopia
 
       use Supervisor
-
       alias Queuetopia.Jobs.Job
 
-      @typedoc "Option values used by the `start*` functions"
       @type option :: {:poll_interval, non_neg_integer()}
 
+      @otp_app Keyword.fetch!(opts, :otp_app)
       @repo Keyword.fetch!(opts, :repo)
       @performer Keyword.fetch!(opts, :performer) |> to_string()
       @scope __MODULE__ |> to_string()
 
       @default_poll_interval 60 * 1_000
+
+      defp config(otp_app, queue) when is_atom(otp_app) and is_atom(queue) do
+        config = Application.get_env(otp_app, queue, [])
+        [otp_app: otp_app] ++ config
+      end
 
       @doc """
       Starts the Queuetopia supervisor process.
@@ -70,18 +82,18 @@ defmodule Queuetopia do
       """
       @spec start_link([option()]) :: Supervisor.on_start()
       def start_link(opts \\ []) do
-        poll_interval = Keyword.get(opts, :poll_interval, @default_poll_interval)
-        repoll_after_job_performed? = Keyword.get(opts, :repoll_after_job_performed?, false)
+        config = config(@otp_app, __MODULE__)
+        poll_interval = Keyword.get(config, :poll_interval, @default_poll_interval)
+        repoll_after_job_performed? = Keyword.get(config, :repoll_after_job_performed?, false)
+        disable? = Keyword.get(config, :disable?, false)
 
-        Supervisor.start_link(
-          __MODULE__,
-          [
-            repo: @repo,
-            poll_interval: poll_interval,
-            repoll_after_job_performed?: repoll_after_job_performed?
-          ],
-          name: __MODULE__
-        )
+        opts = [
+          repo: @repo,
+          poll_interval: poll_interval,
+          repoll_after_job_performed?: repoll_after_job_performed?
+        ]
+
+        if disable?, do: :ignore, else: Supervisor.start_link(__MODULE__, opts, name: __MODULE__)
       end
 
       @impl true
