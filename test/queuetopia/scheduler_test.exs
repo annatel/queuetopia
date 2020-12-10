@@ -9,6 +9,7 @@ defmodule Queuetopia.SchedulerTest do
 
   setup do
     Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 50)
+    :ok
   end
 
   test "poll only available queues" do
@@ -455,16 +456,11 @@ defmodule Queuetopia.SchedulerTest do
 
     scheduler_pid = Process.whereis(TestQueuetopia.Scheduler)
 
-    {:messages, messages} = Process.info(scheduler_pid, :messages)
-    assert length(messages) == 0
-
     Queuetopia.Scheduler.send_poll(scheduler_pid)
-
     {:messages, messages} = Process.info(scheduler_pid, :messages)
     assert length(messages) == 1
 
     Queuetopia.Scheduler.send_poll(scheduler_pid)
-
     {:messages, messages} = Process.info(scheduler_pid, :messages)
     assert length(messages) == 1
 

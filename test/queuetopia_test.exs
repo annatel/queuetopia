@@ -3,12 +3,24 @@ defmodule QueuetopiaTest do
   alias Queuetopia.{TestQueuetopia, TestQueuetopia_2}
   alias Queuetopia.Jobs.Job
 
+  setup do
+    Application.put_env(:queuetopia, TestQueuetopia, disable?: false)
+    :ok
+  end
+
   test "multiple instances can coexist" do
     start_supervised!(Queuetopia.TestQueuetopia)
     start_supervised!(Queuetopia.TestQueuetopia_2)
 
     :sys.get_state(Queuetopia.TestQueuetopia.Scheduler)
     :sys.get_state(Queuetopia.TestQueuetopia_2.Scheduler)
+  end
+
+  test "disable? option" do
+    Application.put_env(:queuetopia, TestQueuetopia, disable?: true)
+    start_supervised!(Queuetopia.TestQueuetopia)
+
+    assert is_nil(Process.whereis(Queuetopia.TestQueuetopia.Scheduler))
   end
 
   describe "create_job/4" do
