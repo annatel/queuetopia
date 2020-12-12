@@ -2,24 +2,82 @@ defmodule Queuetopia.Test.AssertionsTest do
   use Queuetopia.DataCase
   import Queuetopia.Test.Assertions
 
-  describe "assert_job_created/0" do
+  describe "assert_job_created/1" do
     test "when the job has just been created" do
       scope = Queuetopia.TestQueuetopia.scope()
-      queue = [scope] |> Module.safe_concat()
+      queuetopia = Module.safe_concat([scope])
 
-      job = Factory.insert(:job, scope: scope)
+      Factory.insert(:job, scope: scope)
 
-      assert_job_created(queue, Map.from_struct(job))
+      assert_job_created(queuetopia)
     end
 
     test "when the job has not been created" do
       assert_raise ExUnit.AssertionError, fn ->
-        scope = Queuetopia.TestQueuetopia.scope()
-        queue = [scope] |> Module.safe_concat()
+        job = Factory.params_for(:job, scope: Queuetopia.TestQueuetopia.scope())
+        assert_job_created(Queuetopia.TestQueuetopia, job)
+      end
+    end
+  end
 
-        job_params = Factory.params_for(:job)
+  describe "assert_job_created/2 for a specific queue" do
+    test "when the job has just been created" do
+      job = Factory.insert(:job, scope: Queuetopia.TestQueuetopia.scope())
 
-        assert_job_created(queue, job_params)
+      assert_job_created(Queuetopia.TestQueuetopia, job.queue)
+    end
+
+    test "when the job has not been created for the queue" do
+      assert_raise ExUnit.AssertionError, fn ->
+        Factory.insert(:job, scope: Queuetopia.TestQueuetopia.scope())
+
+        assert_job_created(Queuetopia.TestQueuetopia, "sample queue")
+      end
+    end
+
+    test "when the job has not been created at all" do
+      assert_raise ExUnit.AssertionError, fn ->
+        assert_job_created(Queuetopia.TestQueuetopia, "sample_queue")
+      end
+    end
+  end
+
+  describe "assert_job_created/2 for a specific job" do
+    test "when the job has just been created" do
+      job = Factory.insert(:job, scope: Queuetopia.TestQueuetopia.scope())
+
+      assert_job_created(Queuetopia.TestQueuetopia, job)
+    end
+
+    test "when the job has not been created" do
+      assert_raise ExUnit.AssertionError, fn ->
+        job = Factory.params_for(:job, scope: Queuetopia.TestQueuetopia.scope())
+
+        assert_job_created(Queuetopia.TestQueuetopia, job)
+      end
+    end
+  end
+
+  describe "assert_job_created/2 for a specific job and a specific queue" do
+    test "when the job has just been created" do
+      job = Factory.insert(:job, scope: Queuetopia.TestQueuetopia.scope())
+
+      assert_job_created(Queuetopia.TestQueuetopia, job.queue, job)
+    end
+
+    test "when the job has not been created for the queue" do
+      assert_raise ExUnit.AssertionError, fn ->
+        job = Factory.insert(:job, scope: Queuetopia.TestQueuetopia.scope())
+
+        assert_job_created(Queuetopia.TestQueuetopia, "sample queue", job)
+      end
+    end
+
+    test "when the job has not been created at all" do
+      assert_raise ExUnit.AssertionError, fn ->
+        job = Factory.params_for(:job, scope: Queuetopia.TestQueuetopia.scope())
+
+        assert_job_created(Queuetopia.TestQueuetopia, "sample_queue", job)
       end
     end
   end
