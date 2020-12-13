@@ -38,7 +38,7 @@ The package can be installed by adding `queuetopia` to your list of dependencies
 ```elixir
 def deps do
   [
-    {:queuetopia, "~> 1.1.0"}
+    {:queuetopia, "~> 1.1.1"}
   ]
 end
 ```
