@@ -452,9 +452,6 @@ defmodule Queuetopia.SchedulerTest do
   test "send_poll/1 sends the poll messages, only if the process inbox is empty" do
     Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 5_000)
 
-    scope = TestQueuetopia.scope()
-    Factory.insert(:slow_job, params: %{"duration" => 100}, scope: scope)
-
     start_supervised!(TestQueuetopia)
 
     scheduler_pid = Process.whereis(TestQueuetopia.Scheduler)
