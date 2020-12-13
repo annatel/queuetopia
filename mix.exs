@@ -2,7 +2,7 @@ defmodule Queuetopia.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/annatel/queuetopia"
-  @version "1.1.1"
+  @version "1.1.2"
 
   def project do
     [

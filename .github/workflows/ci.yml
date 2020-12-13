@@ -46,12 +46,7 @@ jobs:
       - name: Linter
         run: mix format --check-formatted
 
-      - name: Run Tests
+      - name: Run Tests (Code coverage)
         run: |
           source env/ci.env
-          mix test --trace
-
-      - name: Code coverage
-        run: |
-          source env/ci.env
-          mix test --cover
+          mix test --trace --cover
