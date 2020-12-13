@@ -32,6 +32,7 @@ defmodule Queuetopia.MixProject do
   defp deps do
     [
       {:ecto_sql, "~> 3.4"},
+      {:recase, "~> 0.7.0"},
       {:myxql, "~> 0.4.0", only: :test},
       {:jason, "~> 1.0"},
       {:antl_utils_elixir, "~> 0.2.0"},

@@ -44,9 +44,15 @@ defmodule Queuetopia.Test.AssertionsTest do
 
   describe "assert_job_created/2 for a specific job" do
     test "when the job has just been created" do
-      job = Factory.insert(:job, scope: Queuetopia.TestQueuetopia.scope())
+      job = Factory.insert(:job, scope: Queuetopia.TestQueuetopia.scope(), params: %{b: 1, c: 2})
 
       assert_job_created(Queuetopia.TestQueuetopia, job)
+      assert_job_created(Queuetopia.TestQueuetopia, %{params: %{c: 2}})
+
+      assert_raise ExUnit.AssertionError, fn ->
+        assert_job_created(Queuetopia.TestQueuetopia, %{params: %{c: 10}})
+        assert_job_created(Queuetopia.TestQueuetopia, %{action: 10, params: %{c: 2}})
+      end
     end
 
     test "when the job has not been created" do
@@ -58,11 +64,17 @@ defmodule Queuetopia.Test.AssertionsTest do
     end
   end
 
-  describe "assert_job_created/2 for a specific job and a specific queue" do
+  describe "assert_job_created/3 for a specific job and a specific queue" do
     test "when the job has just been created" do
-      job = Factory.insert(:job, scope: Queuetopia.TestQueuetopia.scope())
+      job = Factory.insert(:job, scope: Queuetopia.TestQueuetopia.scope(), params: %{b: 1, c: 2})
 
       assert_job_created(Queuetopia.TestQueuetopia, job.queue, job)
+      assert_job_created(Queuetopia.TestQueuetopia, job.queue, %{params: %{c: 2}})
+
+      assert_raise ExUnit.AssertionError, fn ->
+        assert_job_created(Queuetopia.TestQueuetopia, job.queue, %{params: %{c: 10}})
+        assert_job_created(Queuetopia.TestQueuetopia, job.queue, %{action: 10, params: %{c: 2}})
+      end
     end
 
     test "when the job has not been created for the queue" do
