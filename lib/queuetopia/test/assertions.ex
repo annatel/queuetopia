@@ -18,63 +18,75 @@ defmodule Queuetopia.Test.Assertions do
   """
 
   def assert_job_created(queuetopia) when is_atom(queuetopia) do
-    repo = queuetopia.repo()
-
-    job = Job |> Ecto.Query.last() |> repo.one()
+    job = get_last_job(queuetopia)
     refute is_nil(job)
-    job
   end
 
   def assert_job_created(queuetopia, queue) when is_atom(queuetopia) and is_binary(queue) do
-    repo = queuetopia.repo()
-
-    job =
-      Job
-      |> Ecto.Query.where([job], job.queue == ^queue)
-      |> Ecto.Query.last()
-      |> repo.one()
-
+    job = get_last_job(queuetopia, queue)
     refute is_nil(job)
-    job
   end
 
-  def assert_job_created(queuetopia, %Job{} = job) when is_atom(queuetopia) do
-    assert_job_created(queuetopia, Map.from_struct(job) |> Map.delete(:__meta__))
+  def assert_job_created(queuetopia, %{} = job) when is_atom(queuetopia) do
+    last_job = get_last_job(queuetopia)
+    refute is_nil(last_job)
+
+    attrs = mapify(job)
+
+    assert_job_attrs_match(last_job, attrs)
   end
 
-  def assert_job_created(queuetopia, %{} = attrs) when is_atom(queuetopia) do
-    job = assert_job_created(queuetopia)
-    job |> Map.from_struct() |> assert_job_attrs_match(attrs)
-  end
-
-  def assert_job_created(queuetopia, queue, %Job{} = job)
+  def assert_job_created(queuetopia, queue, %{} = job)
       when is_atom(queuetopia) and is_binary(queue) do
-    assert_job_created(queuetopia, queue, Map.from_struct(job) |> Map.delete(:__meta__))
+    last_job = get_last_job(queuetopia, queue)
+    refute is_nil(last_job)
+
+    attrs = mapify(job)
+
+    assert_job_attrs_match(last_job, attrs)
   end
 
-  def assert_job_created(queuetopia, queue, %{} = attrs)
-      when is_atom(queuetopia) and is_binary(queue) do
-    job = assert_job_created(queuetopia, queue)
-    job |> Map.from_struct() |> assert_job_attrs_match(attrs)
-  end
+  defp assert_job_attrs_match(last_job, %{params: %{} = params} = attrs) do
+    last_job_attrs = last_job |> Map.from_struct()
 
-  defp assert_job_attrs_match(job_attrs, %{params: %{} = params} = attrs) do
     assert MapSet.subset?(
              params |> MapSet.new(),
-             job_attrs.params |> Recase.Enumerable.atomize_keys() |> MapSet.new()
+             last_job_attrs.params |> MapSet.new()
            ),
            """
-           Expected: #{inspect(job_attrs |> Recase.Enumerable.atomize_keys())}
-           Got:  #{inspect(attrs)}
+           match failed
+           found job: #{inspect(last_job)}
+           match proposition:  #{inspect(attrs)}
            """
 
-    assert_job_attrs_match(job_attrs, attrs |> Map.delete(:params))
+    assert_job_attrs_match(last_job, attrs |> Map.delete(:params))
   end
 
-  defp assert_job_attrs_match(job_attrs, %{} = attrs) do
-    assert MapSet.subset?(attrs |> MapSet.new(), job_attrs |> MapSet.new()), """
-      Expected: #{inspect(job_attrs |> Recase.Enumerable.atomize_keys())}
-      Got:  #{inspect(attrs)}
+  defp assert_job_attrs_match(last_job, %{} = attrs) do
+    last_job_attrs = last_job |> Map.from_struct()
+
+    assert MapSet.subset?(attrs |> MapSet.new(), last_job_attrs |> MapSet.new()), """
+      match failed
+      found job: #{inspect(last_job)}
+      match proposition:  #{inspect(attrs)}
     """
   end
+
+  defp get_last_job(queuetopia) do
+    repo = queuetopia.repo()
+
+    Job |> Ecto.Query.last() |> repo.one()
+  end
+
+  defp get_last_job(queuetopia, queue) do
+    repo = queuetopia.repo()
+
+    Job
+    |> Ecto.Query.where([job], job.queue == ^queue)
+    |> Ecto.Query.last()
+    |> repo.one()
+  end
+
+  defp mapify(%Job{} = job), do: job |> Map.from_struct() |> Map.delete(:__meta__)
+  defp mapify(%{} = job), do: job
 end
