@@ -39,7 +39,7 @@ defmodule Queuetopia.Test.Assertions do
   end
 
   def assert_job_created(queuetopia, %Job{} = job) when is_atom(queuetopia) do
-    assert_job_created(queuetopia, Map.from_struct(job))
+    assert_job_created(queuetopia, Map.from_struct(job) |> Map.delete(:__meta__))
   end
 
   def assert_job_created(queuetopia, %{} = attrs) when is_atom(queuetopia) do
@@ -49,7 +49,7 @@ defmodule Queuetopia.Test.Assertions do
 
   def assert_job_created(queuetopia, queue, %Job{} = job)
       when is_atom(queuetopia) and is_binary(queue) do
-    assert_job_created(queuetopia, queue, Map.from_struct(job))
+    assert_job_created(queuetopia, queue, Map.from_struct(job) |> Map.delete(:__meta__))
   end
 
   def assert_job_created(queuetopia, queue, %{} = attrs)
