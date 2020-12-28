@@ -38,7 +38,7 @@ The package can be installed by adding `queuetopia` to your list of dependencies
 ```elixir
 def deps do
   [
-    {:queuetopia, "~> 1.1.3"}
+    {:queuetopia, "~> 1.2"}
   ]
 end
 ```
@@ -140,7 +140,7 @@ The configuration can be set as below:
 
 ```
 
-Note that the polling interval is optionnal.
+Note that the polling interval is optionnal and is an available param of start_link/1.
 By default, it will be set to 60 seconds.
 
 
