@@ -32,7 +32,6 @@ defmodule Queuetopia do
       # config/config.exs
       config :my_app, MyApp.MailQueue,
         poll_interval: 60 * 1_000,
-        repoll_after_job_performed?: true,
         disable?: true
 
   """
@@ -83,14 +82,17 @@ defmodule Queuetopia do
       @spec start_link([option()]) :: Supervisor.on_start()
       def start_link(opts \\ []) do
         config = config(@otp_app, __MODULE__)
-        poll_interval = Keyword.get(config, :poll_interval, @default_poll_interval)
-        repoll_after_job_performed? = Keyword.get(config, :repoll_after_job_performed?, false)
+
+        poll_interval =
+          Keyword.get(opts, :poll_interval) ||
+            Keyword.get(config, :poll_interval) ||
+            @default_poll_interval
+
         disable? = Keyword.get(config, :disable?, false)
 
         opts = [
           repo: @repo,
-          poll_interval: poll_interval,
-          repoll_after_job_performed?: repoll_after_job_performed?
+          poll_interval: poll_interval
         ]
 
         if disable?, do: :ignore, else: Supervisor.start_link(__MODULE__, opts, name: __MODULE__)
@@ -105,7 +107,6 @@ defmodule Queuetopia do
              name: scheduler(),
              task_supervisor_name: task_supervisor(),
              repo: Keyword.fetch!(args, :repo),
-             repoll_after_job_performed?: Keyword.fetch!(args, :repoll_after_job_performed?),
              scope: @scope,
              poll_interval: Keyword.fetch!(args, :poll_interval)
            ]}

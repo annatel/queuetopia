@@ -136,7 +136,6 @@ The configuration can be set as below:
  # config/config.exs
   config :my_app, MyApp.MailQueue,
     poll_interval: 60 * 1_000,
-    repoll_after_job_performed?: true,
     disable?: true
 
 ```

@@ -35,7 +35,6 @@ defmodule Queuetopia.Scheduler do
       repo: Keyword.get(opts, :repo),
       task_supervisor_name: Keyword.get(opts, :task_supervisor_name),
       poll_interval: Keyword.get(opts, :poll_interval),
-      repoll_after_job_performed?: Keyword.get(opts, :repoll_after_job_performed?),
       scope: Keyword.get(opts, :scope),
       jobs: %{}
     }
@@ -87,8 +86,7 @@ defmodule Queuetopia.Scheduler do
 
     Locks.unlock_queue(repo, scope, job.queue)
 
-    if state.repoll_after_job_performed?,
-      do: Process.send(self(), {:poll, continue_polling?: false}, [])
+    Process.send(self(), {:poll, continue_polling?: false}, [])
 
     {:noreply, %{state | jobs: Map.delete(jobs, ref)}}
   end

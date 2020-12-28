@@ -16,6 +16,30 @@ defmodule QueuetopiaTest do
     :sys.get_state(Queuetopia.TestQueuetopia_2.Scheduler)
   end
 
+  describe "start_link/1:  poll_interval option" do
+    test "preseance to the param" do
+      Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 3)
+
+      start_supervised!({Queuetopia.TestQueuetopia, poll_interval: 4})
+
+      %{poll_interval: 4} = :sys.get_state(Queuetopia.TestQueuetopia.Scheduler)
+    end
+
+    test "when there is no param, try to take the value from the config" do
+      Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 3)
+
+      start_supervised!(Queuetopia.TestQueuetopia)
+
+      %{poll_interval: 3} = :sys.get_state(Queuetopia.TestQueuetopia.Scheduler)
+    end
+
+    test "when there is no param and no config, takes the default value" do
+      start_supervised!(Queuetopia.TestQueuetopia)
+
+      %{poll_interval: 60_000} = :sys.get_state(Queuetopia.TestQueuetopia.Scheduler)
+    end
+  end
+
   test "disable? option" do
     Application.put_env(:queuetopia, TestQueuetopia, disable?: true)
     start_supervised!(Queuetopia.TestQueuetopia)
@@ -98,10 +122,13 @@ defmodule QueuetopiaTest do
 
       scheduler_pid = Process.whereis(TestQueuetopia.Scheduler)
 
+      :sys.get_state(TestQueuetopia.Scheduler)
       assert :ok = TestQueuetopia.send_poll()
 
       {:messages, messages} = Process.info(scheduler_pid, :messages)
       assert length(messages) == 1
+
+      :sys.get_state(TestQueuetopia.Scheduler)
 
       assert :ok = TestQueuetopia.send_poll()
       assert length(messages) == 1

@@ -413,17 +413,14 @@ defmodule Queuetopia.SchedulerTest do
     end
   end
 
-  describe "repoll_after_job_performed?" do
+  describe "repolls after job performed?" do
     test "after a job succeeded" do
       scope = TestQueuetopia.scope()
 
       %{queue: queue} = Factory.insert(:success_job, scope: scope)
       _ = Factory.insert(:success_job, scope: scope, queue: queue)
 
-      Application.put_env(:queuetopia, TestQueuetopia,
-        poll_interval: 500,
-        repoll_after_job_performed?: true
-      )
+      Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 500)
 
       start_supervised!(TestQueuetopia)
 
@@ -437,10 +434,7 @@ defmodule Queuetopia.SchedulerTest do
 
       Factory.insert(:failure_job, scope: scope)
 
-      Application.put_env(:queuetopia, TestQueuetopia,
-        poll_interval: 500,
-        repoll_after_job_performed?: true
-      )
+      Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 500)
 
       start_supervised!(TestQueuetopia)
 
@@ -456,9 +450,13 @@ defmodule Queuetopia.SchedulerTest do
 
     scheduler_pid = Process.whereis(TestQueuetopia.Scheduler)
 
+    :sys.get_state(TestQueuetopia.Scheduler)
+
     Queuetopia.Scheduler.send_poll(scheduler_pid)
     {:messages, messages} = Process.info(scheduler_pid, :messages)
     assert length(messages) == 1
+
+    :sys.get_state(TestQueuetopia.Scheduler)
 
     Queuetopia.Scheduler.send_poll(scheduler_pid)
     {:messages, messages} = Process.info(scheduler_pid, :messages)
