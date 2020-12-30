@@ -1,14 +1,14 @@
 defmodule Queuetopia.Test.Assertions do
   import ExUnit.Assertions
   require Ecto.Query
-  alias Queuetopia.Jobs.Job
+  alias Queuetopia.Queue.Job
 
   @doc """
   Asserts the job has juste been created
 
   It can be used as below:
 
-    job = MyQueuetopia.Jobs.create_job("mailer_queue", "deliver_mail", %{body: "hello", from: "from", to: "to"})
+    job = MyQueuetopia.Queue.create_job("mailer_queue", "deliver_mail", %{body: "hello", from: "from", to: "to"})
 
     assert_job_created(MyQueuetopia)
     assert_job_created(MyQueuetopia, "mailer_queue")

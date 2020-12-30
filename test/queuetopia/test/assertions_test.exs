@@ -47,7 +47,7 @@ defmodule Queuetopia.Test.AssertionsTest do
       %{id: job_id} =
         Factory.insert(:job, scope: Queuetopia.TestQueuetopia.scope(), params: %{b: 1, c: 2})
 
-      job = Queuetopia.TestQueuetopia.repo().get(Queuetopia.Jobs.Job, job_id)
+      job = Queuetopia.TestQueuetopia.repo().get(Queuetopia.Queue.Job, job_id)
       assert_job_created(Queuetopia.TestQueuetopia, job)
       assert_job_created(Queuetopia.TestQueuetopia, %{params: %{"c" => 2}})
       assert_job_created(Queuetopia.TestQueuetopia, %{action: job.action, params: %{"c" => 2}})
@@ -72,7 +72,7 @@ defmodule Queuetopia.Test.AssertionsTest do
       %{id: job_id} =
         Factory.insert(:job, scope: Queuetopia.TestQueuetopia.scope(), params: %{b: 1, c: 2})
 
-      job = Queuetopia.TestQueuetopia.repo().get(Queuetopia.Jobs.Job, job_id)
+      job = Queuetopia.TestQueuetopia.repo().get(Queuetopia.Queue.Job, job_id)
       assert_job_created(Queuetopia.TestQueuetopia, job.queue, job)
       assert_job_created(Queuetopia.TestQueuetopia, job.queue, %{params: %{"c" => 2}})
 

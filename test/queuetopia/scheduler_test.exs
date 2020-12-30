@@ -1,9 +1,8 @@
 defmodule Queuetopia.SchedulerTest do
   use Queuetopia.DataCase
 
-  alias Queuetopia.Locks.Lock
-  alias Queuetopia.Jobs
-  alias Queuetopia.Jobs.Job
+  alias Queuetopia.Queue
+  alias Queuetopia.Queue.{Job, Lock}
   alias Queuetopia.TestRepo
   alias Queuetopia.TestQueuetopia
 
@@ -139,8 +138,8 @@ defmodule Queuetopia.SchedulerTest do
 
       assert_receive :started, 200
 
-      assert is_nil(Jobs.get_next_pending_job(TestRepo, scope, fast_queue))
-      assert %Job{id: ^id} = Jobs.get_next_pending_job(TestRepo, scope, slow_queue)
+      assert is_nil(Queue.get_next_pending_job(TestRepo, scope, fast_queue))
+      assert %Job{id: ^id} = Queue.get_next_pending_job(TestRepo, scope, slow_queue)
 
       _ = Factory.insert(:success_job, scope: scope, queue: fast_queue)
 
@@ -149,8 +148,8 @@ defmodule Queuetopia.SchedulerTest do
 
       refute_receive :toto, 50
 
-      assert is_nil(Jobs.get_next_pending_job(TestRepo, scope, fast_queue))
-      assert is_nil(Jobs.get_next_pending_job(TestRepo, scope, slow_queue))
+      assert is_nil(Queue.get_next_pending_job(TestRepo, scope, fast_queue))
+      assert is_nil(Queue.get_next_pending_job(TestRepo, scope, slow_queue))
 
       :sys.get_state(TestQueuetopia.Scheduler)
     end
@@ -169,8 +168,8 @@ defmodule Queuetopia.SchedulerTest do
 
       refute_receive :toto, 50
 
-      assert %Job{id: ^id} = Jobs.get_next_pending_job(TestRepo, scope, failed_queue)
-      assert is_nil(Jobs.get_next_pending_job(TestRepo, scope, other_queue))
+      assert %Job{id: ^id} = Queue.get_next_pending_job(TestRepo, scope, failed_queue)
+      assert is_nil(Queue.get_next_pending_job(TestRepo, scope, other_queue))
 
       _ = Factory.insert(:success_job, scope: scope, queue: other_queue)
 
@@ -178,8 +177,8 @@ defmodule Queuetopia.SchedulerTest do
 
       refute_receive :toto, 50
 
-      assert %Job{id: ^id} = Jobs.get_next_pending_job(TestRepo, scope, failed_queue)
-      assert is_nil(Jobs.get_next_pending_job(TestRepo, scope, other_queue))
+      assert %Job{id: ^id} = Queue.get_next_pending_job(TestRepo, scope, failed_queue)
+      assert is_nil(Queue.get_next_pending_job(TestRepo, scope, other_queue))
 
       :sys.get_state(TestQueuetopia.Scheduler)
     end
@@ -203,16 +202,16 @@ defmodule Queuetopia.SchedulerTest do
       assert_receive :started, 200
 
       refute_receive :ok, 200
-      assert is_nil(Jobs.get_next_pending_job(TestRepo, scope, other_queue))
-      assert %Job{id: ^id} = Jobs.get_next_pending_job(TestRepo, scope, expired_queue)
+      assert is_nil(Queue.get_next_pending_job(TestRepo, scope, other_queue))
+      assert %Job{id: ^id} = Queue.get_next_pending_job(TestRepo, scope, expired_queue)
 
       _ = Factory.insert(:success_job, scope: scope, queue: other_queue)
 
       assert_receive :ok, 200
       refute_receive :toto, 50
 
-      assert is_nil(Jobs.get_next_pending_job(TestRepo, scope, other_queue))
-      assert %Job{id: ^id} = Jobs.get_next_pending_job(TestRepo, scope, expired_queue)
+      assert is_nil(Queue.get_next_pending_job(TestRepo, scope, other_queue))
+      assert %Job{id: ^id} = Queue.get_next_pending_job(TestRepo, scope, expired_queue)
 
       :sys.get_state(TestQueuetopia.Scheduler)
     end
@@ -231,16 +230,16 @@ defmodule Queuetopia.SchedulerTest do
 
       refute_receive :toto, 50
 
-      assert is_nil(Jobs.get_next_pending_job(TestRepo, scope, success_queue))
-      assert %Job{id: ^id} = Jobs.get_next_pending_job(TestRepo, scope, raising_queue)
+      assert is_nil(Queue.get_next_pending_job(TestRepo, scope, success_queue))
+      assert %Job{id: ^id} = Queue.get_next_pending_job(TestRepo, scope, raising_queue)
 
       _ = Factory.insert(:success_job, scope: scope, queue: success_queue)
 
       assert_receive :ok, 200
       refute_receive :toto, 50
 
-      assert is_nil(Jobs.get_next_pending_job(TestRepo, scope, success_queue))
-      assert %Job{id: ^id} = Jobs.get_next_pending_job(TestRepo, scope, raising_queue)
+      assert is_nil(Queue.get_next_pending_job(TestRepo, scope, success_queue))
+      assert %Job{id: ^id} = Queue.get_next_pending_job(TestRepo, scope, raising_queue)
 
       :sys.get_state(TestQueuetopia.Scheduler)
     end
@@ -257,7 +256,7 @@ defmodule Queuetopia.SchedulerTest do
       assert_receive :fail, 200
       refute_receive :toto, 50
 
-      assert %Job{id: ^id, error: "error"} = Jobs.get_next_pending_job(TestRepo, scope, queue)
+      assert %Job{id: ^id, error: "error"} = Queue.get_next_pending_job(TestRepo, scope, queue)
 
       job = TestRepo.get_by(Job, id: id)
       job |> Ecto.Changeset.change(action: "success") |> TestRepo.update!()
@@ -265,7 +264,7 @@ defmodule Queuetopia.SchedulerTest do
       assert_receive :ok, 200
       refute_receive :toto, 50
 
-      assert is_nil(Jobs.get_next_pending_job(TestRepo, scope, queue))
+      assert is_nil(Queue.get_next_pending_job(TestRepo, scope, queue))
 
       :sys.get_state(TestQueuetopia.Scheduler)
     end
@@ -285,14 +284,14 @@ defmodule Queuetopia.SchedulerTest do
 
       assert_receive :started, 200
       refute_receive :ok, 300
-      assert %Job{id: ^id, error: "timeout"} = Jobs.get_next_pending_job(TestRepo, scope, queue)
+      assert %Job{id: ^id, error: "timeout"} = Queue.get_next_pending_job(TestRepo, scope, queue)
 
       job = TestRepo.get_by(Job, id: id)
       job |> Ecto.Changeset.change(action: "success") |> TestRepo.update!()
 
       assert_receive :ok, 1_500
       refute_receive :toto, 50
-      assert is_nil(Jobs.get_next_pending_job(TestRepo, scope, queue))
+      assert is_nil(Queue.get_next_pending_job(TestRepo, scope, queue))
 
       :sys.get_state(TestQueuetopia.Scheduler)
     end
@@ -307,14 +306,14 @@ defmodule Queuetopia.SchedulerTest do
       assert_receive :raise, 200
       refute_receive :toto, 50
 
-      assert %Job{id: ^id} = Jobs.get_next_pending_job(TestRepo, scope, queue)
+      assert %Job{id: ^id} = Queue.get_next_pending_job(TestRepo, scope, queue)
 
       job = TestRepo.get_by(Job, id: id)
       job |> Ecto.Changeset.change(action: "success") |> TestRepo.update!()
 
       assert_receive :ok, 100
       refute_receive :toto, 50
-      assert is_nil(Jobs.get_next_pending_job(TestRepo, scope, queue))
+      assert is_nil(Queue.get_next_pending_job(TestRepo, scope, queue))
 
       :sys.get_state(TestQueuetopia.Scheduler)
     end
@@ -338,7 +337,7 @@ defmodule Queuetopia.SchedulerTest do
                attempted_by: attempted_by,
                attempts: attempts,
                error: "error"
-             } = Jobs.get_next_pending_job(TestRepo, scope, queue)
+             } = Queue.get_next_pending_job(TestRepo, scope, queue)
 
       assert attempts > 0
       refute is_nil(attempted_at)
@@ -369,7 +368,7 @@ defmodule Queuetopia.SchedulerTest do
                attempted_by: attempted_by,
                attempts: attempts,
                error: "timeout"
-             } = Jobs.get_next_pending_job(TestRepo, scope, queue)
+             } = Queue.get_next_pending_job(TestRepo, scope, queue)
 
       assert attempts > 0
       refute is_nil(attempted_at)
@@ -403,7 +402,7 @@ defmodule Queuetopia.SchedulerTest do
                attempted_by: attempted_by,
                attempts: attempts,
                error: "down"
-             } = Jobs.get_next_pending_job(TestRepo, scope, queue)
+             } = Queue.get_next_pending_job(TestRepo, scope, queue)
 
       assert attempts > 0
       refute is_nil(attempted_at)

@@ -4,9 +4,8 @@ defmodule Queuetopia.Scheduler do
   """
   use GenServer
 
-  alias Queuetopia.Locks
-  alias Queuetopia.Jobs
-  alias Queuetopia.Jobs.Job
+  alias Queuetopia.Queue
+  alias Queuetopia.Queue.Job
 
   @type option :: {:poll_interval, pos_integer()}
 
@@ -63,7 +62,7 @@ defmodule Queuetopia.Scheduler do
     job = Map.get(jobs, ref)
     handle_task_result(repo, job, {:error, "down"})
 
-    Locks.unlock_queue(repo, scope, job.queue)
+    Queue.unlock_queue(repo, scope, job.queue)
 
     {:noreply, %{state | jobs: Map.delete(jobs, ref)}}
   end
@@ -84,7 +83,7 @@ defmodule Queuetopia.Scheduler do
 
     handle_task_result(repo, job, task_result)
 
-    Locks.unlock_queue(repo, scope, job.queue)
+    Queue.unlock_queue(repo, scope, job.queue)
 
     Process.send(self(), {:poll, continue_polling?: false}, [])
 
@@ -93,15 +92,15 @@ defmodule Queuetopia.Scheduler do
 
   defp handle_task_result(repo, job, result) do
     unless is_nil(job) do
-      Jobs.persist_result(repo, job, result)
+      Queue.persist_result(repo, job, result)
     end
   end
 
   defp poll_queues(task_supervisor_name, poll_interval, repo, scope, jobs, continue_polling?) do
-    Locks.release_expired_locks(repo, scope)
+    Queue.release_expired_locks(repo, scope)
 
     jobs =
-      Jobs.list_available_pending_queues(repo, scope)
+      Queue.list_available_pending_queues(repo, scope)
       |> Enum.map(&perform_next_pending_job(&1, task_supervisor_name, repo, scope))
       |> Enum.reject(&is_nil(&1))
       |> Enum.into(%{})
@@ -120,9 +119,9 @@ defmodule Queuetopia.Scheduler do
          repo,
          scope
        ) do
-    with %Job{} <- job = Jobs.get_next_pending_job(repo, scope, queue),
-         {:ok, job} <- Jobs.fetch_job(repo, job) do
-      task = Task.Supervisor.async_nolink(task_supervisor_name, Jobs, :perform, [job])
+    with %Job{} <- job = Queue.get_next_pending_job(repo, scope, queue),
+         {:ok, job} <- Queue.fetch_job(repo, job) do
+      task = Task.Supervisor.async_nolink(task_supervisor_name, Queue, :perform, [job])
 
       Process.send_after(self(), {:kill, task}, job.timeout)
       {task.ref, job}

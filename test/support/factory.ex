@@ -1,8 +1,8 @@
 defmodule Queuetopia.Factory do
   use ExMachina.Ecto, repo: Queuetopia.TestRepo
 
-  alias Queuetopia.Jobs.Job
-  alias Queuetopia.Locks.Lock
+  alias Queuetopia.Queue.Job
+  alias Queuetopia.Queue.Lock
 
   @job_performer Queuetopia.TestPerfomer
 
@@ -16,7 +16,7 @@ defmodule Queuetopia.Factory do
     DateTime.from_naive!(~N[2018-12-19T00:00:00Z], "Etc/UTC")
   end
 
-  @spec lock_factory :: Queuetopia.Locks.Lock.t()
+  @spec lock_factory :: Queuetopia.Queue.Lock.t()
   def lock_factory do
     locked_at = DateTime.utc_now() |> DateTime.truncate(:second)
     locked_until = locked_at |> DateTime.add(3600, :second) |> DateTime.truncate(:second)

@@ -1,8 +1,8 @@
-defmodule Queuetopia.Jobs.Performer do
+defmodule Queuetopia.Queue.Performer do
   @moduledoc """
   The behaviour for a Queuetopia performer.
   """
-  alias Queuetopia.Jobs.Job
+  alias Queuetopia.Queue.Job
 
   @doc """
   Callback invoked by the Queuetopia to perfom a job.

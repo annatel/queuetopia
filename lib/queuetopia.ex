@@ -10,10 +10,10 @@ defmodule Queuetopia do
   For example, the performer can be implemented like this:
 
       defmodule MyApp.MailQueue.Performer do
-        @behaviour Queuetopia.Jobs.Performer
+        @behaviour Queuetopia.Queue.Performer
 
         @impl true
-        def perform(%Queuetopia.Jobs.Job{action: "do_x"}) do
+        def perform(%Queuetopia.Queue.Job{action: "do_x"}) do
           do_x()
         end
 
@@ -59,7 +59,7 @@ defmodule Queuetopia do
       @behaviour Queuetopia
 
       use Supervisor
-      alias Queuetopia.Jobs.Job
+      alias Queuetopia.Queue.Job
 
       @type option :: {:poll_interval, non_neg_integer()}
 
@@ -123,7 +123,7 @@ defmodule Queuetopia do
               {:error, Ecto.Changeset.t()} | {:ok, Job.t()}
       def create_job(queue, action, params, opts \\ []) do
         result =
-          Queuetopia.Jobs.create_job(@repo, @performer, @scope, queue, action, params, opts)
+          Queuetopia.Queue.create_job(@repo, @performer, @scope, queue, action, params, opts)
 
         with {:ok, %Job{}} <- result do
           send_poll()

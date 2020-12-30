@@ -1,7 +1,7 @@
 defmodule Queuetopia.TestPerfomer do
-  @behaviour Queuetopia.Jobs.Performer
+  @behaviour Queuetopia.Queue.Performer
 
-  alias Queuetopia.Jobs.Job
+  alias Queuetopia.Queue.Job
   alias Queuetopia.Factory
 
   @performer Queuetopia.TestPerfomer |> to_string()
