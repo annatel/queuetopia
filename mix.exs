@@ -36,6 +36,7 @@ defmodule Queuetopia.MixProject do
       {:myxql, "~> 0.4.0", only: :test},
       {:jason, "~> 1.0"},
       {:antl_utils_elixir, "~> 0.2.0"},
+      {:antl_utils_ecto, "~> 1.1.1"},
       {:ex_machina, "~> 2.4", only: :test},
       {:mox, "~> 0.5", only: :test},
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false}

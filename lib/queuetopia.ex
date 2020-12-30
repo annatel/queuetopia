@@ -51,13 +51,9 @@ defmodule Queuetopia do
       iex> MyApp.MailQueue.create_job("mails_queue_1", "send_mail", %{email_address: "toto@mail.com", body: "Welcome"}, [timeout: 1_000, max_backoff: 60_000])
 
   """
-  @callback create_job(binary(), binary(), map(), [Job.option()]) ::
-              {:error, Ecto.Changeset.t()} | {:ok, Job.t()}
 
   defmacro __using__(opts) do
     quote bind_quoted: [opts: opts] do
-      @behaviour Queuetopia
-
       use Supervisor
       alias Queuetopia.Queue.Job
 
@@ -119,11 +115,21 @@ defmodule Queuetopia do
         Module.concat(__MODULE__, child)
       end
 
-      @spec create_job(binary(), binary(), map(), [Job.option()]) ::
+      @spec create_job(binary(), binary(), map(), DateTime.t(), [Job.option()] | []) ::
               {:error, Ecto.Changeset.t()} | {:ok, Job.t()}
-      def create_job(queue, action, params, opts \\ []) do
+      def create_job(queue, action, params, scheduled_at \\ DateTime.utc_now(), opts \\ [])
+          when is_binary(queue) and is_binary(action) and is_map(params) do
         result =
-          Queuetopia.Queue.create_job(@repo, @performer, @scope, queue, action, params, opts)
+          Queuetopia.Queue.create_job(
+            @repo,
+            @performer,
+            @scope,
+            queue,
+            action,
+            params,
+            scheduled_at,
+            opts
+          )
 
         with {:ok, %Job{}} <- result do
           send_poll()

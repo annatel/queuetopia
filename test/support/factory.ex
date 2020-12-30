@@ -45,7 +45,7 @@ defmodule Queuetopia.Factory do
       performer: @job_performer |> to_string(),
       action: sequence("action_"),
       params: %{"bin_pid" => pid_to_bin()},
-      scheduled_at: DateTime.utc_now(),
+      scheduled_at: DateTime.utc_now() |> DateTime.truncate(:second),
       timeout: 5_000,
       max_backoff: 0,
       max_attempts: 20

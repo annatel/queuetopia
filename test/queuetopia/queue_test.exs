@@ -124,6 +124,7 @@ defmodule Queuetopia.JobsTest do
                  params.queue,
                  params.action,
                  params.params,
+                 params.scheduled_at,
                  opts
                )
 
@@ -149,7 +150,8 @@ defmodule Queuetopia.JobsTest do
                  params.scope,
                  params.queue,
                  params.action,
-                 params.params
+                 params.params,
+                 params.scheduled_at
                )
 
       assert job.timeout == Job.default_timeout()
@@ -158,7 +160,9 @@ defmodule Queuetopia.JobsTest do
     end
 
     test "with invalid params, returns a changeset error" do
-      assert {:error, changeset} = Queue.create_job(TestRepo, nil, nil, nil, nil, nil)
+      assert {:error, changeset} =
+               Queue.create_job(TestRepo, nil, nil, nil, nil, nil, DateTime.utc_now())
+
       refute changeset.valid?
     end
   end

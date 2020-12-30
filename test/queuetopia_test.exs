@@ -79,7 +79,7 @@ defmodule QueuetopiaTest do
                 max_backoff: ^max_backoff,
                 max_attempts: ^max_attempts
               }} =
-               TestQueuetopia.create_job(queue, action, params,
+               TestQueuetopia.create_job(queue, action, params, DateTime.utc_now(),
                  timeout: timeout,
                  max_backoff: max_backoff,
                  max_attempts: max_attempts
@@ -123,14 +123,19 @@ defmodule QueuetopiaTest do
       scheduler_pid = Process.whereis(TestQueuetopia.Scheduler)
 
       :sys.get_state(TestQueuetopia.Scheduler)
-      assert :ok = TestQueuetopia.send_poll()
 
       {:messages, messages} = Process.info(scheduler_pid, :messages)
-      assert length(messages) == 1
+      assert length(messages) == 0
 
       :sys.get_state(TestQueuetopia.Scheduler)
 
       assert :ok = TestQueuetopia.send_poll()
+      assert :ok = TestQueuetopia.send_poll()
+      assert :ok = TestQueuetopia.send_poll()
+      assert :ok = TestQueuetopia.send_poll()
+      assert :ok = TestQueuetopia.send_poll()
+
+      {:messages, messages} = Process.info(scheduler_pid, :messages)
       assert length(messages) == 1
 
       :sys.get_state(TestQueuetopia.Scheduler)

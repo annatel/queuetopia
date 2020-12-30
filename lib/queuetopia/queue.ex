@@ -83,10 +83,18 @@ defmodule Queuetopia.Queue do
   including options.
   """
 
-  @spec create_job(module(), binary(), binary(), binary(), binary(), map(), [Job.option()]) ::
-          {:error, Ecto.Changeset.t()} | {:ok, Job.t()}
+  @spec create_job(
+          module(),
+          binary(),
+          binary(),
+          binary(),
+          binary(),
+          map(),
+          DateTime.t(),
+          [Job.option()]
+        ) :: {:error, Ecto.Changeset.t()} | {:ok, Job.t()}
 
-  def create_job(repo, performer, scope, queue, action, params, opts \\ []) do
+  def create_job(repo, performer, scope, queue, action, params, scheduled_at, opts \\ []) do
     options = Enum.into(opts, %{})
 
     %{
@@ -95,7 +103,7 @@ defmodule Queuetopia.Queue do
       performer: performer,
       action: action,
       params: params,
-      scheduled_at: DateTime.utc_now()
+      scheduled_at: scheduled_at
     }
     |> Map.merge(options)
     |> create_job_multi()

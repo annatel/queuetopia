@@ -8,7 +8,7 @@ defmodule Queuetopia.Test.Assertions do
 
   It can be used as below:
 
-    job = MyQueuetopia.Queue.create_job("mailer_queue", "deliver_mail", %{body: "hello", from: "from", to: "to"})
+    job = MyQueuetopia.create_job("mailer_queue", "deliver_mail", %{body: "hello", from: "from", to: "to"})
 
     assert_job_created(MyQueuetopia)
     assert_job_created(MyQueuetopia, "mailer_queue")

@@ -450,14 +450,15 @@ defmodule Queuetopia.SchedulerTest do
     scheduler_pid = Process.whereis(TestQueuetopia.Scheduler)
 
     :sys.get_state(TestQueuetopia.Scheduler)
-
-    Queuetopia.Scheduler.send_poll(scheduler_pid)
     {:messages, messages} = Process.info(scheduler_pid, :messages)
-    assert length(messages) == 1
-
-    :sys.get_state(TestQueuetopia.Scheduler)
+    assert length(messages) == 0
 
     Queuetopia.Scheduler.send_poll(scheduler_pid)
+    Queuetopia.Scheduler.send_poll(scheduler_pid)
+    Queuetopia.Scheduler.send_poll(scheduler_pid)
+    Queuetopia.Scheduler.send_poll(scheduler_pid)
+    Queuetopia.Scheduler.send_poll(scheduler_pid)
+
     {:messages, messages} = Process.info(scheduler_pid, :messages)
     assert length(messages) == 1
 

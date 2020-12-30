@@ -48,6 +48,16 @@ defmodule Queuetopia.Queue.JobTest do
       assert changeset.valid?
     end
 
+    test "scheduled_at is consistent" do
+      utc_now = DateTime.utc_now() |> DateTime.truncate(:second)
+      params = Factory.params_for(:job, scheduled_at: utc_now |> DateTime.add(-10, :second))
+
+      changeset = Job.create_changeset(params)
+      refute changeset.valid?
+      error = "should be after or equal to #{utc_now}"
+      assert %{scheduled_at: [^error]} = errors_on(changeset)
+    end
+
     test "when required params are missing, returns an invalid changeset" do
       changeset = Job.create_changeset(%{timeout: nil, max_backoff: nil, max_attempts: nil})
 
