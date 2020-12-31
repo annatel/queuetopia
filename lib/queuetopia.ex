@@ -152,25 +152,12 @@ defmodule Queuetopia do
         end
       end
 
-      defp scheduler() do
-        child_name("Scheduler")
-      end
+      def repo(), do: @repo
+      def performer(), do: @performer
+      def scope(), do: @scope
 
-      defp task_supervisor() do
-        child_name("TaskSupervisor")
-      end
-
-      def repo() do
-        @repo
-      end
-
-      def performer() do
-        @performer
-      end
-
-      def scope() do
-        @scope
-      end
+      defp scheduler(), do: child_name("Scheduler")
+      defp task_supervisor(), do: child_name("TaskSupervisor")
     end
   end
 end
