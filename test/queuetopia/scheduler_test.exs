@@ -224,7 +224,7 @@ defmodule Queuetopia.SchedulerTest do
 
       assert_receive {^queue, ^slow_job_id, :started}, 500
       assert_receive {^queue, ^slow_job_id, :timeout}, 500
-      assert_receive {^queue, ^slow_job_id, :started}, 500
+      assert_receive {^queue, ^slow_job_id, :started}, 1_500
       assert_receive {^queue, ^slow_job_id, :timeout}, 500
 
       :sys.get_state(TestQueuetopia.Scheduler)
@@ -375,20 +375,14 @@ defmodule Queuetopia.SchedulerTest do
   end
 
   test "send_poll/1 sends the poll messages, only if the process inbox is empty" do
-    scope = TestQueuetopia.scope()
     Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 5_000)
-
-    %{queue: queue, id: job_id} = Factory.insert(:success_job, scope: scope)
 
     start_supervised!(TestQueuetopia)
     scheduler_pid = Process.whereis(TestQueuetopia.Scheduler)
 
-    assert_receive {^queue, ^job_id, :ok}, 100
     {:messages, messages} = Process.info(scheduler_pid, :messages)
     assert length(messages) == 0
 
-    Queuetopia.Scheduler.send_poll(scheduler_pid)
-    Queuetopia.Scheduler.send_poll(scheduler_pid)
     Queuetopia.Scheduler.send_poll(scheduler_pid)
     Queuetopia.Scheduler.send_poll(scheduler_pid)
     Queuetopia.Scheduler.send_poll(scheduler_pid)

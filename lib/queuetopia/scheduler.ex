@@ -84,9 +84,7 @@ defmodule Queuetopia.Scheduler do
 
     Queue.unlock_queue(repo, scope, job.queue)
 
-    Process.send(self(), {:poll, one_time?: true}, [])
-    {:messages, messages} = Process.info(self, :messages)
-    IO.inspect(messages)
+    send_poll(self())
 
     {:noreply, %{state | jobs: Map.delete(jobs, ref)}}
   end
@@ -111,8 +109,6 @@ defmodule Queuetopia.Scheduler do
 
     unless one_time? do
       Process.send_after(self(), {:poll, one_time?: false}, poll_interval)
-      {:messages, messages} = Process.info(self, :messages)
-      IO.inspect(messages)
     end
 
     jobs
