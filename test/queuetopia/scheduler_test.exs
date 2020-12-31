@@ -19,50 +19,40 @@ defmodule Queuetopia.SchedulerTest do
 
     start_supervised!(TestQueuetopia)
 
-    refute_receive :started, 50
+    refute_receive {^queue, _, :started}, 50
 
     TestRepo.delete(lock)
 
-    assert_receive :started, 80
-    assert_receive :ok, 150
+    assert_receive {^queue, _, :started}, 80
+    assert_receive {^queue, _, :ok}, 150
   end
 
   test "poll only queues of its scope" do
-    scope = TestQueuetopia.scope()
+    _scope = TestQueuetopia.scope()
 
-    %Job{scope: scope_2} = Factory.insert(:slow_job, params: %{"duration" => 100})
+    %Job{scope: _other_scope, queue: queue} =
+      Factory.insert(:slow_job, params: %{"duration" => 100})
 
-    assert scope != scope_2
+    start_supervised!({TestQueuetopia, poll_interval: 50})
 
-    start_supervised!(TestQueuetopia)
-
-    refute_receive :started, 50
-    refute_receive :started, 50
-    refute_receive :started, 50
+    refute_receive {^queue, _, _}, 200
   end
 
   test "let a long job finish while the timeout is not reached" do
     scope = TestQueuetopia.scope()
 
-    %Job{id: id} =
+    %Job{queue: queue} =
       Factory.insert(:slow_job,
         params: %{"duration" => 200},
         scope: scope,
         timeout: 5_000
       )
 
-    start_supervised!(TestQueuetopia)
+    start_supervised!({TestQueuetopia, poll_interval: 50})
 
-    assert_receive :started, 70
-
-    %Job{done_at: done_at} = TestRepo.get!(Job, id)
-    assert is_nil(done_at)
-
-    assert_receive :ok, 250
-    refute_receive :started, 50
-
-    %Job{done_at: done_at} = TestRepo.get!(Job, id)
-    refute is_nil(done_at)
+    assert_receive {^queue, _, :started}, 70
+    refute_receive {^queue, _, :started}, 250
+    assert_receive {^queue, _, :ok}, 10
 
     :sys.get_state(TestQueuetopia.Scheduler)
   end
@@ -79,21 +69,13 @@ defmodule Queuetopia.SchedulerTest do
 
     start_supervised!(TestQueuetopia)
 
-    assert_receive :started, 80
+    assert_receive {^queue, _, :started}, 80
+    assert %Lock{} = TestRepo.get_by(Lock, queue: queue, scope: scope)
 
-    lock = TestRepo.get_by(Lock, queue: queue, scope: scope)
-    assert %Lock{id: id} = lock
+    assert_receive {^queue, _, :ok}, 400
+    refute_receive "used to wait", 500
 
-    refute_receive :started, 50
-
-    lock = TestRepo.get_by(Lock, queue: queue, scope: scope)
-    assert %Lock{id: ^id} = lock
-
-    assert_receive :ok, 250
-    refute_receive :started, 50
-
-    lock = TestRepo.get_by(Lock, queue: queue, scope: scope)
-    assert is_nil(lock)
+    assert is_nil(TestRepo.get_by(Lock, queue: queue, scope: scope))
 
     :sys.get_state(TestQueuetopia.Scheduler)
   end
@@ -101,7 +83,7 @@ defmodule Queuetopia.SchedulerTest do
   test "keeps the lock on the queue a while (one second) after the job timeouts" do
     scope = TestQueuetopia.scope()
 
-    %Job{} =
+    %Job{queue: queue} =
       Factory.insert(:slow_job,
         params: %{"duration" => 5_000},
         timeout: 2_000,
@@ -111,24 +93,21 @@ defmodule Queuetopia.SchedulerTest do
     Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 500)
     start_supervised!(TestQueuetopia)
 
-    assert_receive :started, 500
-    assert_receive :timeout, 3_000
-    refute_receive :started, 500
-    assert_receive :started, 2_000
+    assert_receive {^queue, _, :started}, 500
+    assert_receive {^queue, _, :timeout}, 3_000
+    refute_receive {^queue, _, :started}, 500
+    assert_receive {^queue, _, :started}, 2_000
   end
 
   describe "isolation" do
     test "a slow queue don't slow down the others" do
       scope = TestQueuetopia.scope()
 
-      %{queue: fast_queue} = Factory.insert(:success_job)
-      _ = Factory.insert(:success_job, scope: scope, queue: fast_queue)
+      %{queue: fast_queue, id: fast_job_id_1} = Factory.insert(:success_job, scope: scope)
 
-      start_supervised!(TestQueuetopia)
+      %{id: fast_job_id_2} = Factory.insert(:success_job, scope: scope, queue: fast_queue)
 
-      assert_receive :ok, 200
-
-      %{id: id, queue: slow_queue} =
+      %{queue: slow_queue, id: slow_job_id} =
         Factory.insert(
           :slow_job,
           scope: scope,
@@ -136,20 +115,13 @@ defmodule Queuetopia.SchedulerTest do
           timeout: 5_000
         )
 
-      assert_receive :started, 200
+      start_supervised!(TestQueuetopia)
 
-      assert is_nil(Queue.get_next_pending_job(TestRepo, scope, fast_queue))
-      assert %Job{id: ^id} = Queue.get_next_pending_job(TestRepo, scope, slow_queue)
-
-      _ = Factory.insert(:success_job, scope: scope, queue: fast_queue)
-
-      assert_receive :ok, 200
-      assert_receive :ok, 500
-
-      refute_receive :toto, 50
-
-      assert is_nil(Queue.get_next_pending_job(TestRepo, scope, fast_queue))
-      assert is_nil(Queue.get_next_pending_job(TestRepo, scope, slow_queue))
+      assert_receive {^slow_queue, ^slow_job_id, :started}, 200
+      assert_receive {^fast_queue, ^fast_job_id_1, :ok}, 200
+      refute_receive {^slow_queue, ^slow_job_id, :ok}, 200
+      assert_receive {^fast_queue, ^fast_job_id_2, :ok}, 200
+      refute_receive {^slow_queue, ^slow_job_id, :ok}, 200
 
       :sys.get_state(TestQueuetopia.Scheduler)
     end
@@ -157,28 +129,16 @@ defmodule Queuetopia.SchedulerTest do
     test "a failed job blocks only its own queue" do
       scope = TestQueuetopia.scope()
 
-      %{id: id, queue: failed_queue} = Factory.insert(:failure_job, scope: scope)
-
-      %{queue: other_queue} = Factory.insert(:success_job, scope: scope)
+      %{queue: failed_queue, id: failed_job_id} = Factory.insert(:failure_job, scope: scope)
+      %{queue: success_queue, id: success_job_1} = Factory.insert(:success_job, scope: scope)
+      %{id: success_job_2} = Factory.insert(:success_job, scope: scope, queue: success_queue)
 
       start_supervised!(TestQueuetopia)
 
-      assert_receive :ok, 200
-      assert_receive :fail, 200
-
-      refute_receive :toto, 50
-
-      assert %Job{id: ^id} = Queue.get_next_pending_job(TestRepo, scope, failed_queue)
-      assert is_nil(Queue.get_next_pending_job(TestRepo, scope, other_queue))
-
-      _ = Factory.insert(:success_job, scope: scope, queue: other_queue)
-
-      assert_receive :ok, 200
-
-      refute_receive :toto, 50
-
-      assert %Job{id: ^id} = Queue.get_next_pending_job(TestRepo, scope, failed_queue)
-      assert is_nil(Queue.get_next_pending_job(TestRepo, scope, other_queue))
+      assert_receive {^success_queue, ^success_job_1, :ok}, 200
+      assert_receive {^failed_queue, ^failed_job_id, :fail}, 200
+      assert_receive {^success_queue, ^success_job_2, :ok}, 200
+      assert_receive {^failed_queue, ^failed_job_id, :fail}, 200
 
       :sys.get_state(TestQueuetopia.Scheduler)
     end
@@ -186,7 +146,7 @@ defmodule Queuetopia.SchedulerTest do
     test "an expired job blocks only its own queue" do
       scope = TestQueuetopia.scope()
 
-      %{id: id, queue: expired_queue} =
+      %{queue: expired_queue, id: slow_job_id} =
         Factory.insert(:slow_job,
           params: %{"duration" => 500},
           scope: scope,
@@ -194,24 +154,15 @@ defmodule Queuetopia.SchedulerTest do
           max_backoff: 0
         )
 
-      %{queue: other_queue} = Factory.insert(:success_job, scope: scope)
+      %{queue: success_queue, id: success_job_1} = Factory.insert(:success_job, scope: scope)
+      %{id: success_job_2} = Factory.insert(:success_job, scope: scope, queue: success_queue)
 
       start_supervised!(TestQueuetopia)
 
-      assert_receive :ok, 200
-      assert_receive :started, 200
-
-      refute_receive :ok, 200
-      assert is_nil(Queue.get_next_pending_job(TestRepo, scope, other_queue))
-      assert %Job{id: ^id} = Queue.get_next_pending_job(TestRepo, scope, expired_queue)
-
-      _ = Factory.insert(:success_job, scope: scope, queue: other_queue)
-
-      assert_receive :ok, 200
-      refute_receive :toto, 50
-
-      assert is_nil(Queue.get_next_pending_job(TestRepo, scope, other_queue))
-      assert %Job{id: ^id} = Queue.get_next_pending_job(TestRepo, scope, expired_queue)
+      assert_receive {^success_queue, ^success_job_1, :ok}, 200
+      assert_receive {^expired_queue, ^slow_job_id, :started}, 200
+      assert_receive {^success_queue, ^success_job_2, :ok}, 200
+      assert_receive {^expired_queue, ^slow_job_id, :timeout}, 300
 
       :sys.get_state(TestQueuetopia.Scheduler)
     end
@@ -219,27 +170,17 @@ defmodule Queuetopia.SchedulerTest do
     test "a raising job blocks only its own queue" do
       scope = TestQueuetopia.scope()
 
-      %{id: id, queue: raising_queue} = Factory.insert(:raising_job, scope: scope)
-
-      %{queue: success_queue} = Factory.insert(:success_job, scope: scope)
+      %{queue: raising_queue, id: raising_job_id} = Factory.insert(:raising_job, scope: scope)
+      %{queue: success_queue, id: success_job_1} = Factory.insert(:success_job, scope: scope)
+      %{id: success_job_2} = Factory.insert(:success_job, scope: scope, queue: success_queue)
 
       start_supervised!(TestQueuetopia)
 
-      assert_receive :ok, 200
-      assert_receive :raise, 200
-
-      refute_receive :toto, 50
-
-      assert is_nil(Queue.get_next_pending_job(TestRepo, scope, success_queue))
-      assert %Job{id: ^id} = Queue.get_next_pending_job(TestRepo, scope, raising_queue)
-
-      _ = Factory.insert(:success_job, scope: scope, queue: success_queue)
-
-      assert_receive :ok, 200
-      refute_receive :toto, 50
-
-      assert is_nil(Queue.get_next_pending_job(TestRepo, scope, success_queue))
-      assert %Job{id: ^id} = Queue.get_next_pending_job(TestRepo, scope, raising_queue)
+      assert_receive {^success_queue, ^success_job_1, :ok}, 200
+      assert_receive {^raising_queue, ^raising_job_id, :raise}, 200
+      assert_receive {^success_queue, ^success_job_2, :ok}, 200
+      assert_receive {^raising_queue, ^raising_job_id, :raise}, 200
+      assert_receive {^raising_queue, ^raising_job_id, :raise}, 200
 
       :sys.get_state(TestQueuetopia.Scheduler)
     end
@@ -249,22 +190,21 @@ defmodule Queuetopia.SchedulerTest do
     test "a failed job will be retried" do
       scope = TestQueuetopia.scope()
 
-      %{id: id, queue: queue} = Factory.insert(:failure_job, scope: scope)
+      %{id: failing_job_id, queue: queue} = Factory.insert(:failure_job, scope: scope)
 
       start_supervised!(TestQueuetopia)
 
-      assert_receive :fail, 200
-      refute_receive :toto, 50
+      assert_receive {^queue, ^failing_job_id, :fail}, 200
+      assert_receive {^queue, ^failing_job_id, :fail}, 200
+      assert_receive {^queue, ^failing_job_id, :fail}, 200
+      refute_receive {^queue, :ok}, 50
 
-      assert %Job{id: ^id, error: "error"} = Queue.get_next_pending_job(TestRepo, scope, queue)
+      Job
+      |> TestRepo.get_by(id: failing_job_id)
+      |> Ecto.Changeset.change(action: "success")
+      |> TestRepo.update!()
 
-      job = TestRepo.get_by(Job, id: id)
-      job |> Ecto.Changeset.change(action: "success") |> TestRepo.update!()
-
-      assert_receive :ok, 200
-      refute_receive :toto, 50
-
-      assert is_nil(Queue.get_next_pending_job(TestRepo, scope, queue))
+      assert_receive {^queue, ^failing_job_id, :ok}, 200
 
       :sys.get_state(TestQueuetopia.Scheduler)
     end
@@ -272,7 +212,7 @@ defmodule Queuetopia.SchedulerTest do
     test "an expired job will be retried" do
       scope = TestQueuetopia.scope()
 
-      %{id: id, queue: queue} =
+      %{id: slow_job_id, queue: queue} =
         Factory.insert(:slow_job,
           params: %{"duration" => 300},
           timeout: 100,
@@ -282,16 +222,10 @@ defmodule Queuetopia.SchedulerTest do
 
       start_supervised!(TestQueuetopia)
 
-      assert_receive :started, 200
-      refute_receive :ok, 300
-      assert %Job{id: ^id, error: "timeout"} = Queue.get_next_pending_job(TestRepo, scope, queue)
-
-      job = TestRepo.get_by(Job, id: id)
-      job |> Ecto.Changeset.change(action: "success") |> TestRepo.update!()
-
-      assert_receive :ok, 1_500
-      refute_receive :toto, 50
-      assert is_nil(Queue.get_next_pending_job(TestRepo, scope, queue))
+      assert_receive {^queue, ^slow_job_id, :started}, 500
+      assert_receive {^queue, ^slow_job_id, :timeout}, 500
+      assert_receive {^queue, ^slow_job_id, :started}, 500
+      assert_receive {^queue, ^slow_job_id, :timeout}, 500
 
       :sys.get_state(TestQueuetopia.Scheduler)
     end
@@ -299,21 +233,21 @@ defmodule Queuetopia.SchedulerTest do
     test "a raising job will be retried" do
       scope = TestQueuetopia.scope()
 
-      %{id: id, queue: queue} = Factory.insert(:raising_job, scope: scope, timeout: 50)
+      %{id: raising_job_id, queue: queue} =
+        Factory.insert(:raising_job, scope: scope, timeout: 50)
 
       start_supervised!(TestQueuetopia)
 
-      assert_receive :raise, 200
-      refute_receive :toto, 50
+      assert_receive {^queue, ^raising_job_id, :raise}, 200
+      assert_receive {^queue, ^raising_job_id, :raise}, 200
+      assert_receive {^queue, ^raising_job_id, :raise}, 200
 
-      assert %Job{id: ^id} = Queue.get_next_pending_job(TestRepo, scope, queue)
+      Job
+      |> TestRepo.get_by(id: raising_job_id)
+      |> Ecto.Changeset.change(action: "success")
+      |> TestRepo.update!()
 
-      job = TestRepo.get_by(Job, id: id)
-      job |> Ecto.Changeset.change(action: "success") |> TestRepo.update!()
-
-      assert_receive :ok, 100
-      refute_receive :toto, 50
-      assert is_nil(Queue.get_next_pending_job(TestRepo, scope, queue))
+      assert_receive {^queue, ^raising_job_id, :ok}, 200
 
       :sys.get_state(TestQueuetopia.Scheduler)
     end
@@ -323,15 +257,15 @@ defmodule Queuetopia.SchedulerTest do
     test "a failed job persists the failure error and set the attempt attributes" do
       scope = TestQueuetopia.scope()
 
-      %{id: id, queue: queue} = Factory.insert(:failure_job, scope: scope)
+      %{id: failing_job_id, queue: queue} = Factory.insert(:failure_job, scope: scope)
 
       start_supervised!(TestQueuetopia)
 
-      assert_receive :fail, 100
-      refute_receive :toto, 50
+      assert_receive {^queue, ^failing_job_id, :fail}, 200
+      :timer.sleep(50)
 
       assert %Job{
-               id: ^id,
+               id: ^failing_job_id,
                done_at: nil,
                attempted_at: attempted_at,
                attempted_by: attempted_by,
@@ -349,7 +283,7 @@ defmodule Queuetopia.SchedulerTest do
     test "an expired job persists the :timeout error and set the attempt attributes" do
       scope = TestQueuetopia.scope()
 
-      %{id: id, queue: queue} =
+      %{id: slow_job_id, queue: queue} =
         Factory.insert(:slow_job,
           params: %{"duration" => 100},
           timeout: 50,
@@ -358,11 +292,11 @@ defmodule Queuetopia.SchedulerTest do
 
       start_supervised!(TestQueuetopia)
 
-      assert_receive :started, 100
-      refute_receive :toto, 200
+      assert_receive {^queue, ^slow_job_id, :started}, 100
+      :timer.sleep(200)
 
       assert %Job{
-               id: ^id,
+               id: ^slow_job_id,
                done_at: nil,
                attempted_at: attempted_at,
                attempted_by: attempted_by,
@@ -381,7 +315,7 @@ defmodule Queuetopia.SchedulerTest do
       scope = TestQueuetopia.scope()
 
       %{
-        id: id,
+        id: raising_job_id,
         scope: scope,
         queue: queue,
         attempts: 0,
@@ -392,11 +326,11 @@ defmodule Queuetopia.SchedulerTest do
 
       start_supervised!(TestQueuetopia)
 
-      assert_receive :raise, 100
-      refute_receive :toto, 50
+      assert_receive {^queue, ^raising_job_id, :raise}, 100
+      :timer.sleep(50)
 
       assert %Job{
-               id: ^id,
+               id: ^raising_job_id,
                done_at: nil,
                attempted_at: attempted_at,
                attempted_by: attempted_by,
@@ -416,40 +350,40 @@ defmodule Queuetopia.SchedulerTest do
     test "after a job succeeded" do
       scope = TestQueuetopia.scope()
 
-      %{queue: queue} = Factory.insert(:success_job, scope: scope)
-      _ = Factory.insert(:success_job, scope: scope, queue: queue)
+      %{queue: queue, id: job_id_1} = Factory.insert(:success_job, scope: scope)
+      %{id: job_id_2} = Factory.insert(:success_job, scope: scope, queue: queue)
 
       Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 500)
 
       start_supervised!(TestQueuetopia)
 
-      assert_receive :ok, 1_000
-
-      assert_receive :ok, 1_000
+      assert_receive {^queue, ^job_id_1, :ok}, 100
+      assert_receive {^queue, ^job_id_2, :ok}, 100
     end
 
     test "after a job failed" do
       scope = TestQueuetopia.scope()
-
-      Factory.insert(:failure_job, scope: scope)
-
       Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 500)
+
+      %{queue: queue, id: job_id_1} = Factory.insert(:failure_job, scope: scope)
 
       start_supervised!(TestQueuetopia)
 
-      assert_receive :fail, 1_000
-      assert_receive :fail, 1_000
+      assert_receive {^queue, ^job_id_1, :fail}, 1_000
+      assert_receive {^queue, ^job_id_1, :fail}, 1_000
     end
   end
 
   test "send_poll/1 sends the poll messages, only if the process inbox is empty" do
+    scope = TestQueuetopia.scope()
     Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 5_000)
 
-    start_supervised!(TestQueuetopia)
+    %{queue: queue, id: job_id} = Factory.insert(:success_job, scope: scope)
 
+    start_supervised!(TestQueuetopia)
     scheduler_pid = Process.whereis(TestQueuetopia.Scheduler)
 
-    :sys.get_state(TestQueuetopia.Scheduler)
+    assert_receive {^queue, ^job_id, :ok}, 100
     {:messages, messages} = Process.info(scheduler_pid, :messages)
     assert length(messages) == 0
 

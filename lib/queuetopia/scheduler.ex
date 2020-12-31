@@ -60,10 +60,9 @@ defmodule Queuetopia.Scheduler do
         %{jobs: jobs, repo: repo, scope: scope} = state
       ) do
     job = Map.get(jobs, ref)
-    handle_task_result(repo, job, {:error, "down"})
+    :ok = handle_task_result(repo, job, {:error, "down"})
 
     Queue.unlock_queue(repo, scope, job.queue)
-
     {:noreply, %{state | jobs: Map.delete(jobs, ref)}}
   end
 
@@ -71,7 +70,7 @@ defmodule Queuetopia.Scheduler do
     Task.shutdown(task, :brutal_kill)
 
     job = Map.get(jobs, task.ref)
-    handle_task_result(repo, job, {:error, "timeout"})
+    :ok = handle_task_result(repo, job, {:error, "timeout"})
 
     {:noreply, %{state | jobs: Map.delete(jobs, task.ref)}}
   end
@@ -81,11 +80,13 @@ defmodule Queuetopia.Scheduler do
 
     job = Map.get(jobs, ref)
 
-    handle_task_result(repo, job, task_result)
+    :ok = handle_task_result(repo, job, task_result)
 
     Queue.unlock_queue(repo, scope, job.queue)
 
     Process.send(self(), {:poll, one_time?: true}, [])
+    {:messages, messages} = Process.info(self, :messages)
+    IO.inspect(messages)
 
     {:noreply, %{state | jobs: Map.delete(jobs, ref)}}
   end
@@ -94,6 +95,8 @@ defmodule Queuetopia.Scheduler do
     unless is_nil(job) do
       Queue.persist_result(repo, job, result)
     end
+
+    :ok
   end
 
   defp poll_queues(task_supervisor_name, poll_interval, repo, scope, jobs, one_time?) do
@@ -108,6 +111,8 @@ defmodule Queuetopia.Scheduler do
 
     unless one_time? do
       Process.send_after(self(), {:poll, one_time?: false}, poll_interval)
+      {:messages, messages} = Process.info(self, :messages)
+      IO.inspect(messages)
     end
 
     jobs
