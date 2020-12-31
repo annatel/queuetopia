@@ -38,7 +38,7 @@ defmodule Queuetopia.Queue.Job do
   def default_max_backoff(), do: @default_max_backoff
   def default_max_attempts(), do: @default_max_attempts
 
-  @spec create_changeset(map()) :: Ecto.Changeset.t()
+  @spec create_changeset(map) :: Ecto.Changeset.t()
   def create_changeset(attrs) when is_map(attrs) do
     %__MODULE__{}
     |> cast(attrs, [
@@ -70,7 +70,7 @@ defmodule Queuetopia.Queue.Job do
     |> validate_number(:max_attempts, greater_than_or_equal_to: 0)
   end
 
-  @spec failed_job_changeset(Job.t(), map()) :: Ecto.Changeset.t()
+  @spec failed_job_changeset(Job.t(), map) :: Ecto.Changeset.t()
   def failed_job_changeset(%__MODULE__{} = job, attrs) when is_map(attrs) do
     job
     |> cast(attrs, [:attempts, :attempted_at, :attempted_by, :scheduled_at, :error])
@@ -78,7 +78,7 @@ defmodule Queuetopia.Queue.Job do
     |> validate_required([:scheduled_at, :error])
   end
 
-  @spec succeeded_job_changeset(Job.t(), map()) :: Ecto.Changeset.t()
+  @spec succeeded_job_changeset(Job.t(), map) :: Ecto.Changeset.t()
   def succeeded_job_changeset(%__MODULE__{} = job, attrs) when is_map(attrs) do
     job
     |> cast(attrs, [:attempts, :attempted_at, :attempted_by, :done_at])

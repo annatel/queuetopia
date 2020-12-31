@@ -14,12 +14,12 @@ defmodule Queuetopia.Queue do
   """
 
   @spec create_job(
-          module(),
-          binary(),
-          binary(),
-          binary(),
-          binary(),
-          map(),
+          module,
+          binary,
+          binary,
+          binary,
+          binary,
+          map,
           DateTime.t(),
           [Job.option()]
         ) :: {:error, Ecto.Changeset.t()} | {:ok, Job.t()}
@@ -87,7 +87,7 @@ defmodule Queuetopia.Queue do
   @doc """
   List the available pending queues by scope a.k.a by Queuetopia.
   """
-  @spec list_available_pending_queues(module(), binary()) :: [binary()]
+  @spec list_available_pending_queues(module, binary) :: [binary]
   def list_available_pending_queues(repo, scope) do
     subset =
       Lock
@@ -108,7 +108,7 @@ defmodule Queuetopia.Queue do
   Get the next available pending job of a given queue by scope a.k.a by Queuetopia.
   If the queue is empty or the next pendign job is scheduled for later, returns nil.
   """
-  @spec get_next_pending_job(module(), binary(), binary()) :: Job.t() | nil
+  @spec get_next_pending_job(module, binary, binary) :: Job.t() | nil
   def get_next_pending_job(repo, scope, queue) when is_binary(queue) do
     job =
       Job
@@ -126,7 +126,7 @@ defmodule Queuetopia.Queue do
   end
 
   @doc false
-  @spec fetch_job(module(), Job.t()) :: {:error, any} | {:ok, any}
+  @spec fetch_job(module, Job.t()) :: {:error, any} | {:ok, any}
   def fetch_job(repo, %Job{id: id} = job) do
     Ecto.Multi.new()
     |> Ecto.Multi.run(:lock, fn _, _ ->
@@ -152,14 +152,14 @@ defmodule Queuetopia.Queue do
   end
 
   @doc false
-  @spec perform(Job.t()) :: :ok | {:ok, any()} | {:error, binary()}
+  @spec perform(Job.t()) :: :ok | {:ok, any()} | {:error, binary}
   def perform(%Job{} = job) do
     performer = resolve_performer(job)
     performer.perform(job)
   end
 
   @doc false
-  @spec persist_result(module(), Job.t(), {:error, any} | :ok | {:ok, any}) :: Job.t()
+  @spec persist_result(module, Job.t(), {:error, any} | :ok | {:ok, any}) :: Job.t()
   def persist_result(repo, %Job{} = job, {:error, error}) when is_binary(error),
     do: persist_failure(repo, job, error)
 
@@ -206,7 +206,7 @@ defmodule Queuetopia.Queue do
   end
 
   @doc false
-  @spec lock_queue(module(), binary(), binary(), integer()) :: {:error, :locked} | {:ok, Lock.t()}
+  @spec lock_queue(module, binary, binary, integer()) :: {:error, :locked} | {:ok, Lock.t()}
   def lock_queue(repo, scope, queue, timeout)
       when is_binary(queue) and is_integer(timeout) do
     utc_now = DateTime.utc_now()
@@ -228,7 +228,7 @@ defmodule Queuetopia.Queue do
   end
 
   @doc false
-  @spec release_expired_locks(module(), binary()) :: any()
+  @spec release_expired_locks(module, binary) :: any()
   def release_expired_locks(repo, scope) do
     utc_now = DateTime.utc_now()
 
@@ -239,7 +239,7 @@ defmodule Queuetopia.Queue do
   end
 
   @doc false
-  @spec unlock_queue(module(), binary(), binary()) :: any
+  @spec unlock_queue(module, binary, binary) :: any
   def unlock_queue(repo, scope, queue) do
     Lock
     |> where([lock], lock.scope == ^scope)

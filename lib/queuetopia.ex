@@ -59,7 +59,7 @@ defmodule Queuetopia do
       Starts the Queuetopia supervisor process.
       The :poll_interval can also be given in order to config the polling interval of the scheduler.
       """
-      @spec start_link([option()]) :: Supervisor.on_start()
+      @spec start_link([option]) :: Supervisor.on_start()
       def start_link(opts \\ []) do
         config = config(@otp_app, __MODULE__)
 
@@ -122,7 +122,7 @@ defmodule Queuetopia do
               [timeout: 1_000, max_backoff: 60_000]
             )
       """
-      @spec create_job(binary(), binary(), map(), DateTime.t(), [Job.option()] | []) ::
+      @spec create_job(binary, binary, map, DateTime.t(), [Job.option()] | []) ::
               {:error, Ecto.Changeset.t()} | {:ok, Job.t()}
       def create_job(queue, action, params, scheduled_at \\ DateTime.utc_now(), opts \\ [])
           when is_binary(queue) and is_binary(action) and is_map(params) do

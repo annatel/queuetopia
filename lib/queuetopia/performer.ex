@@ -9,5 +9,5 @@ defmodule Queuetopia.Performer do
   It may return :ok, an :ok tuple or a tuple error, with a string as error.
   Note that any failure in the processing will cause the job to be retried.
   """
-  @callback perform(Job.t()) :: :ok | {:ok, any()} | {:error, binary()}
+  @callback perform(Job.t()) :: :ok | {:ok, any()} | {:error, binary}
 end

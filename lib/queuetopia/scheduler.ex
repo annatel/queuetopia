@@ -26,7 +26,7 @@ defmodule Queuetopia.Scheduler do
   end
 
   @impl true
-  @spec init([option()]) :: {:ok, map()}
+  @spec init([option]) :: {:ok, map}
   def init(opts) do
     Process.send(self(), {:poll, one_time?: false}, [])
 

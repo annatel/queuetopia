@@ -15,7 +15,7 @@ defmodule Queuetopia.Queue.Lock do
     timestamps()
   end
 
-  @spec changeset(Lock.t(), map()) :: Ecto.Changeset.t()
+  @spec changeset(Lock.t(), map) :: Ecto.Changeset.t()
   def changeset(%__MODULE__{} = lock, attrs) when is_map(attrs) do
     lock
     |> cast(attrs, [:scope, :queue, :locked_at, :locked_by_node, :locked_until])
