@@ -85,18 +85,18 @@ responsible to execute the jobs.
 Define a Queuetopia with a repo and a perfomer like this:
 
 ```elixir
-defmodule MyApp.MailQueue do
+defmodule MyApp.MailQueuetopia do
   use Queuetopia,
     repo: MyApp.Repo,
-    performer: MyApp.MailQueue.Performer
+    performer: MyApp.MailQueuetopia.Performer
 end
 ```
 
-Define the perfomer, adopting the Queuetopia.Queue.Performer behaviour, like this:
+Define the perfomer, adopting the Queuetopia.Performer behaviour, like this:
 
 ```elixir
-defmodule MyApp.MailQueue.Performer do
-  @behaviour Queuetopia.Queue.Performer
+defmodule MyApp.MailQueuetopia.Performer do
+  @behaviour Queuetopia.Performer
 
   @impl true
   def perform(%Queuetopia.Queue.Job{action: "do_x"}) do
@@ -119,7 +119,7 @@ defmodule MyApp do
 
   def start(_type, _args) do
     children = [
-      MyApp.MailQueue
+      MyApp.MailQueuetopia
     ]
     Supervisor.start_link(children, strategy: :one_for_one)
   end
@@ -129,14 +129,14 @@ end
 Or, it can be started directly like this:
 
 ```elixir
-MyApp.MailQueue.start_link()
+MyApp.MailQueuetopia.start_link()
 ```
 
 The configuration can be set as below:
 
 ```elixir
  # config/config.exs
-  config :my_app, MyApp.MailQueue,
+  config :my_app, MyApp.MailQueuetopia,
     poll_interval: 60 * 1_000,
     disable?: true
 
@@ -153,15 +153,15 @@ By default, the job timeout is set to 60 seconds, the max backoff to 24 hours an
 
 
 ```elixir
-MyApp.MailQueue.create_job("mails_queue_1", "send_mail", %{email_address: "toto@mail.com", body: "Welcome"}, [timeout: 1_000, max_backoff: 60_000])
+MyApp.MailQueuetopia.create_job("mails_queue_1", "send_mail", %{email_address: "toto@mail.com", body: "Welcome"}, [timeout: 1_000, max_backoff: 60_000])
 ```
 
 So, the mails_queue_1 was born and you can add it other jobs as we do above.
 
-You can wake up the scheduler to run the next pending jobs by calling the `send_poll/0` function.
+You can notify the queuetopia about a new created job.
 
 ```elixir
-MyApp.MailQueue.send_poll()
+MyApp.MailQueuetopia.notify(:new_incoming_job)
 ```
 
 ### One DB, many Queuetopia

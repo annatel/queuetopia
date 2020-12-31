@@ -114,7 +114,7 @@ defmodule QueuetopiaTest do
     end
   end
 
-  describe "send_poll/0" do
+  describe "listen/1" do
     test "sends a poll message to the scheduler" do
       Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 5_000)
       start_supervised!(TestQueuetopia)
@@ -128,11 +128,11 @@ defmodule QueuetopiaTest do
 
       :sys.get_state(TestQueuetopia.Scheduler)
 
-      assert :ok = TestQueuetopia.send_poll()
-      assert :ok = TestQueuetopia.send_poll()
-      assert :ok = TestQueuetopia.send_poll()
-      assert :ok = TestQueuetopia.send_poll()
-      assert :ok = TestQueuetopia.send_poll()
+      assert :ok = TestQueuetopia.listen(:new_incoming_job)
+      assert :ok = TestQueuetopia.listen(:new_incoming_job)
+      assert :ok = TestQueuetopia.listen(:new_incoming_job)
+      assert :ok = TestQueuetopia.listen(:new_incoming_job)
+      assert :ok = TestQueuetopia.listen(:new_incoming_job)
 
       {:messages, messages} = Process.info(scheduler_pid, :messages)
       assert length(messages) == 1
@@ -141,7 +141,8 @@ defmodule QueuetopiaTest do
     end
 
     test "when the scheduler is down, returns an error tuple" do
-      assert {:error, "scheduler down"} == TestQueuetopia.send_poll()
+      assert {:error, "Queuetopia.TestQueuetopia is down"} ==
+               TestQueuetopia.listen(:new_incoming_job)
     end
   end
 end

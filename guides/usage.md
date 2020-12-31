@@ -84,11 +84,11 @@ defmodule MyApp.MailQueue do
 end
 ```
 
-Define the perfomer, adopting the Queuetopia.Queue.Performer behaviour, like this:
+Define the perfomer, adopting the Queuetopia.Performer behaviour, like this:
 
 ```elixir
 defmodule MyApp.MailQueue.Performer do
-  @behaviour Queuetopia.Queue.Performer
+  @behaviour Queuetopia.Performer
 
   @impl true
   def perform(%Queuetopia.Queue.Job{action: "do_x"}) do
