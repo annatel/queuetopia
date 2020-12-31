@@ -46,6 +46,9 @@ defmodule Queuetopia do
     * `:max_backoff` - default to 24 * 3600 * 1_000
     * `:max_attempts` - default to 20.
 
+  It is possible to schedule jobs in the future. In this FIFO, the first_in is determined by the scheduled_at.
+  Jobs having the same scheduled_at will be ordered by their sequence (arrival order).
+
   ## Examples
 
       iex> MyApp.MailQueue.create_job("mails_queue_1", "send_mail", %{email_address: "toto@mail.com", body: "Welcome"}, [timeout: 1_000, max_backoff: 60_000])

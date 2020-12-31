@@ -15,6 +15,8 @@ A persistant blocking job queue built with Ecto.
 
 - Reactivity — Immediatly try to execute a job that has just been created.
 
+- Scheduled Jobs — Allow to schedule job in the future.
+
 - Retries — Failed jobs are retried with a configurable backoff.
 
 - Persistence — Jobs are stored in a DB and updated after each execution attempt.

@@ -39,7 +39,7 @@ defmodule Queuetopia.Queue do
       |> where([j], j.queue == ^queue)
       |> where([j], j.scope == ^scope)
       |> where([j], is_nil(j.done_at))
-      |> order_by(asc: :sequence)
+      |> order_by(asc: :scheduled_at, asc: :sequence)
       |> limit(1)
       |> repo.one()
 
@@ -120,7 +120,9 @@ defmodule Queuetopia.Queue do
       {:ok, Sequences.next(:queuetopia_sequences, repo)}
     end)
     |> Multi.insert(:job, fn %{sequence: sequence} ->
-      Job.create_changeset(attrs |> Map.put(:sequence, sequence))
+      attrs
+      |> Map.put(:sequence, sequence)
+      |> Job.create_changeset()
     end)
   end
 

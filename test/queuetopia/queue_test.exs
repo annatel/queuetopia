@@ -35,7 +35,7 @@ defmodule Queuetopia.JobsTest do
   end
 
   describe "get_next_pending_job/2" do
-    test "returns the next pending job for a given scoped queue " do
+    test "returns the next pending job for a given scoped queue" do
       %{queue: queue_1, scope: scope_1} = Factory.insert(:done_job)
       %{id: id_1} = Factory.insert(:job, queue: queue_1, scope: scope_1)
 
@@ -46,6 +46,31 @@ defmodule Queuetopia.JobsTest do
       assert %Job{id: ^id_1} = Queue.get_next_pending_job(TestRepo, scope_1, queue_1)
       assert %Job{id: ^id_2} = Queue.get_next_pending_job(TestRepo, scope_1, queue_2)
       assert %Job{id: ^id_3} = Queue.get_next_pending_job(TestRepo, scope_2, queue_3)
+    end
+
+    test "preseance by scheduled_at" do
+      utc_now = DateTime.utc_now()
+
+      %{scope: scope, queue: queue} =
+        Factory.insert(:job, scheduled_at: utc_now |> DateTime.add(15, :second))
+
+      %{id: id} =
+        Factory.insert(:job,
+          scope: scope,
+          queue: queue,
+          scheduled_at: utc_now
+        )
+
+      assert %Job{id: ^id} = Queue.get_next_pending_job(TestRepo, scope, queue)
+    end
+
+    test "for multiple jobs with the same scheduled_at, preseance by sequence" do
+      utc_now = DateTime.utc_now()
+
+      %{id: id_1, scope: scope, queue: queue} = Factory.insert(:job, scheduled_at: utc_now)
+      Factory.insert(:job, scope: scope, queue: queue, scheduled_at: utc_now)
+
+      assert %Job{id: ^id_1} = Queue.get_next_pending_job(TestRepo, scope, queue)
     end
 
     test "when the queue is empty, returns nil" do

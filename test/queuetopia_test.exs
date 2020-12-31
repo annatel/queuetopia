@@ -101,15 +101,14 @@ defmodule QueuetopiaTest do
               }} = TestQueuetopia_2.create_job(queue, action, params)
     end
 
-    test "when the queue is running and the job succeeds, sends a poll request to the scheduler" do
+    test "a created job is immediatly tried if the queue is empty (no need to wait the poll_interval" do
       Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 5_000)
       start_supervised!(TestQueuetopia)
 
       %{queue: queue, action: action, params: params} = Factory.params_for(:success_job)
+      assert {:ok, %Job{id: job_id}} = TestQueuetopia.create_job(queue, action, params)
 
-      assert {:ok, %Job{}} = TestQueuetopia.create_job(queue, action, params)
-
-      assert_receive :ok, 1_000
+      assert_receive {^queue, ^job_id, :ok}, 1_000
 
       :sys.get_state(TestQueuetopia.Scheduler)
     end

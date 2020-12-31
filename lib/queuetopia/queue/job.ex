@@ -68,10 +68,6 @@ defmodule Queuetopia.Queue.Job do
     |> validate_number(:timeout, greater_than_or_equal_to: 0)
     |> validate_number(:max_backoff, greater_than_or_equal_to: 0)
     |> validate_number(:max_attempts, greater_than_or_equal_to: 0)
-    |> AntlUtilsEcto.Changeset.validate_datetime_gte(
-      :scheduled_at,
-      DateTime.utc_now() |> DateTime.truncate(:second)
-    )
   end
 
   @spec failed_job_changeset(Job.t(), map()) :: Ecto.Changeset.t()
