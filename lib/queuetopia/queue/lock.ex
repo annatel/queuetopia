@@ -1,4 +1,6 @@
 defmodule Queuetopia.Queue.Lock do
+  @moduledoc false
+
   use Ecto.Schema
   import Ecto.Changeset, only: [cast: 3, unique_constraint: 3, validate_required: 2]
 

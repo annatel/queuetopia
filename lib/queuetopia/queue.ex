@@ -1,4 +1,6 @@
 defmodule Queuetopia.Queue do
+  @moduledoc false
+
   import Ecto.Query
 
   alias Ecto.Multi

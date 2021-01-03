@@ -8,12 +8,13 @@ defmodule Queuetopia.Test.Assertions do
 
   It can be used as below:
 
-    job = MyQueuetopia.create_job("mailer_queue", "deliver_mail", %{body: "hello", from: "from", to: "to"})
+    # Examples
+        job = MyQueuetopia.create_job("mailer_queue", "deliver_mail", %{body: "hello", from: "from", to: "to"})
 
-    assert_job_created(MyQueuetopia)
-    assert_job_created(MyQueuetopia, "mailer_queue")
-    assert_job_created(MyQueuetopia, "mailer_queue", %{params: %{body: "hello"}})
-    assert_job_created(MyQueuetopia, "mailer_queue", %{action: "deliver_email", params: %{body: "hello"}})
+        assert_job_created(MyQueuetopia)
+        assert_job_created(MyQueuetopia, "mailer_queue")
+        assert_job_created(MyQueuetopia, "mailer_queue", %{params: %{body: "hello"}})
+        assert_job_created(MyQueuetopia, "mailer_queue", %{action: "deliver_email", params: %{body: "hello"}})
 
   """
 

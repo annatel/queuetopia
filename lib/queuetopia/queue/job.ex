@@ -1,4 +1,6 @@
 defmodule Queuetopia.Queue.Job do
+  @moduledoc false
+
   use Ecto.Schema
   import Ecto.Changeset, only: [cast: 3, put_change: 3, validate_number: 3, validate_required: 2]
 
