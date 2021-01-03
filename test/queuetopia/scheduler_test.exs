@@ -359,6 +359,8 @@ defmodule Queuetopia.SchedulerTest do
 
       assert_receive {^queue, ^job_id_1, :ok}, 100
       assert_receive {^queue, ^job_id_2, :ok}, 100
+
+      :sys.get_state(TestQueuetopia.Scheduler)
     end
 
     test "after a job failed" do
@@ -371,6 +373,8 @@ defmodule Queuetopia.SchedulerTest do
 
       assert_receive {^queue, ^job_id_1, :fail}, 1_000
       assert_receive {^queue, ^job_id_1, :fail}, 1_000
+
+      :sys.get_state(TestQueuetopia.Scheduler)
     end
   end
 
