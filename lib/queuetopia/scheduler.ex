@@ -4,9 +4,8 @@ defmodule Queuetopia.Scheduler do
   """
   use GenServer
 
-  alias Queuetopia.Locks
-  alias Queuetopia.Jobs
-  alias Queuetopia.Jobs.Job
+  alias Queuetopia.Queue
+  alias Queuetopia.Queue.Job
 
   @type option :: {:poll_interval, pos_integer()}
 
@@ -16,7 +15,7 @@ defmodule Queuetopia.Scheduler do
 
   def send_poll(scheduler_pid) when is_pid(scheduler_pid) do
     unless has_poll_messages?(scheduler_pid) do
-      Process.send(scheduler_pid, {:poll, continue_polling?: false}, [])
+      Process.send(scheduler_pid, {:poll, one_time?: true}, [])
     end
   end
 
@@ -27,9 +26,9 @@ defmodule Queuetopia.Scheduler do
   end
 
   @impl true
-  @spec init([option()]) :: {:ok, map()}
+  @spec init([option]) :: {:ok, map}
   def init(opts) do
-    Process.send(self(), {:poll, continue_polling?: true}, [])
+    Process.send(self(), {:poll, one_time?: false}, [])
 
     state = %{
       repo: Keyword.get(opts, :repo),
@@ -43,7 +42,7 @@ defmodule Queuetopia.Scheduler do
   end
 
   @impl true
-  def handle_info({:poll, continue_polling?: continue_polling?}, state) do
+  def handle_info({:poll, one_time?: one_time?}, state) do
     %{
       task_supervisor_name: task_supervisor_name,
       poll_interval: poll_interval,
@@ -52,7 +51,7 @@ defmodule Queuetopia.Scheduler do
       jobs: jobs
     } = state
 
-    jobs = poll_queues(task_supervisor_name, poll_interval, repo, scope, jobs, continue_polling?)
+    jobs = poll_queues(task_supervisor_name, poll_interval, repo, scope, jobs, one_time?)
     {:noreply, %{state | jobs: jobs}}
   end
 
@@ -61,10 +60,9 @@ defmodule Queuetopia.Scheduler do
         %{jobs: jobs, repo: repo, scope: scope} = state
       ) do
     job = Map.get(jobs, ref)
-    handle_task_result(repo, job, {:error, "down"})
+    :ok = handle_task_result(repo, job, {:error, "down"})
 
-    Locks.unlock_queue(repo, scope, job.queue)
-
+    Queue.unlock_queue(repo, scope, job.queue)
     {:noreply, %{state | jobs: Map.delete(jobs, ref)}}
   end
 
@@ -72,7 +70,7 @@ defmodule Queuetopia.Scheduler do
     Task.shutdown(task, :brutal_kill)
 
     job = Map.get(jobs, task.ref)
-    handle_task_result(repo, job, {:error, "timeout"})
+    :ok = handle_task_result(repo, job, {:error, "timeout"})
 
     {:noreply, %{state | jobs: Map.delete(jobs, task.ref)}}
   end
@@ -82,33 +80,35 @@ defmodule Queuetopia.Scheduler do
 
     job = Map.get(jobs, ref)
 
-    handle_task_result(repo, job, task_result)
+    :ok = handle_task_result(repo, job, task_result)
 
-    Locks.unlock_queue(repo, scope, job.queue)
+    Queue.unlock_queue(repo, scope, job.queue)
 
-    Process.send(self(), {:poll, continue_polling?: false}, [])
+    send_poll(self())
 
     {:noreply, %{state | jobs: Map.delete(jobs, ref)}}
   end
 
   defp handle_task_result(repo, job, result) do
     unless is_nil(job) do
-      Jobs.persist_result(repo, job, result)
+      Queue.persist_result(repo, job, result)
     end
+
+    :ok
   end
 
-  defp poll_queues(task_supervisor_name, poll_interval, repo, scope, jobs, continue_polling?) do
-    Locks.release_expired_locks(repo, scope)
+  defp poll_queues(task_supervisor_name, poll_interval, repo, scope, jobs, one_time?) do
+    Queue.release_expired_locks(repo, scope)
 
     jobs =
-      Jobs.list_available_pending_queues(repo, scope)
+      Queue.list_available_pending_queues(repo, scope)
       |> Enum.map(&perform_next_pending_job(&1, task_supervisor_name, repo, scope))
       |> Enum.reject(&is_nil(&1))
       |> Enum.into(%{})
       |> Map.merge(jobs)
 
-    if continue_polling? do
-      Process.send_after(self(), {:poll, continue_polling?: true}, poll_interval)
+    unless one_time? do
+      Process.send_after(self(), {:poll, one_time?: false}, poll_interval)
     end
 
     jobs
@@ -120,9 +120,9 @@ defmodule Queuetopia.Scheduler do
          repo,
          scope
        ) do
-    with %Job{} <- job = Jobs.get_next_pending_job(repo, scope, queue),
-         {:ok, job} <- Jobs.fetch_job(repo, job) do
-      task = Task.Supervisor.async_nolink(task_supervisor_name, Jobs, :perform, [job])
+    with %Job{} <- job = Queue.get_next_pending_job(repo, scope, queue),
+         {:ok, job} <- Queue.fetch_job(repo, job) do
+      task = Task.Supervisor.async_nolink(task_supervisor_name, Queue, :perform, [job])
 
       Process.send_after(self(), {:kill, task}, job.timeout)
       {task.ref, job}

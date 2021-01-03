@@ -1,7 +1,7 @@
-defmodule Queuetopia.Locks.LockTest do
+defmodule Queuetopia.Queue.LockTest do
   use Queuetopia.DataCase
 
-  alias Queuetopia.Locks.Lock
+  alias Queuetopia.Queue.Lock
 
   describe "changeset/2" do
     test "only permitted_keys are casted" do

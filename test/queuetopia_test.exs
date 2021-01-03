@@ -1,7 +1,7 @@
 defmodule QueuetopiaTest do
   use Queuetopia.DataCase
   alias Queuetopia.{TestQueuetopia, TestQueuetopia_2}
-  alias Queuetopia.Jobs.Job
+  alias Queuetopia.Queue.Job
 
   setup do
     Application.put_env(:queuetopia, TestQueuetopia, disable?: false)
@@ -79,7 +79,7 @@ defmodule QueuetopiaTest do
                 max_backoff: ^max_backoff,
                 max_attempts: ^max_attempts
               }} =
-               TestQueuetopia.create_job(queue, action, params,
+               TestQueuetopia.create_job(queue, action, params, DateTime.utc_now(),
                  timeout: timeout,
                  max_backoff: max_backoff,
                  max_attempts: max_attempts
@@ -101,21 +101,20 @@ defmodule QueuetopiaTest do
               }} = TestQueuetopia_2.create_job(queue, action, params)
     end
 
-    test "when the queue is running and the job succeeds, sends a poll request to the scheduler" do
+    test "a created job is immediatly tried if the queue is empty (no need to wait the poll_interval" do
       Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 5_000)
       start_supervised!(TestQueuetopia)
 
       %{queue: queue, action: action, params: params} = Factory.params_for(:success_job)
+      assert {:ok, %Job{id: job_id}} = TestQueuetopia.create_job(queue, action, params)
 
-      assert {:ok, %Job{}} = TestQueuetopia.create_job(queue, action, params)
-
-      assert_receive :ok, 1_000
+      assert_receive {^queue, ^job_id, :ok}, 1_000
 
       :sys.get_state(TestQueuetopia.Scheduler)
     end
   end
 
-  describe "send_poll/0" do
+  describe "listen/1" do
     test "sends a poll message to the scheduler" do
       Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 5_000)
       start_supervised!(TestQueuetopia)
@@ -123,21 +122,27 @@ defmodule QueuetopiaTest do
       scheduler_pid = Process.whereis(TestQueuetopia.Scheduler)
 
       :sys.get_state(TestQueuetopia.Scheduler)
-      assert :ok = TestQueuetopia.send_poll()
 
       {:messages, messages} = Process.info(scheduler_pid, :messages)
-      assert length(messages) == 1
+      assert length(messages) == 0
 
       :sys.get_state(TestQueuetopia.Scheduler)
 
-      assert :ok = TestQueuetopia.send_poll()
+      assert :ok = TestQueuetopia.listen(:new_incoming_job)
+      assert :ok = TestQueuetopia.listen(:new_incoming_job)
+      assert :ok = TestQueuetopia.listen(:new_incoming_job)
+      assert :ok = TestQueuetopia.listen(:new_incoming_job)
+      assert :ok = TestQueuetopia.listen(:new_incoming_job)
+
+      {:messages, messages} = Process.info(scheduler_pid, :messages)
       assert length(messages) == 1
 
       :sys.get_state(TestQueuetopia.Scheduler)
     end
 
     test "when the scheduler is down, returns an error tuple" do
-      assert {:error, "scheduler down"} == TestQueuetopia.send_poll()
+      assert {:error, "Queuetopia.TestQueuetopia is down"} ==
+               TestQueuetopia.listen(:new_incoming_job)
     end
   end
 end

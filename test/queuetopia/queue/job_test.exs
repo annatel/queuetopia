@@ -1,7 +1,7 @@
-defmodule Queuetopia.Jobs.JobTest do
+defmodule Queuetopia.Queue.JobTest do
   use Queuetopia.DataCase
 
-  alias Queuetopia.Jobs.Job
+  alias Queuetopia.Queue.Job
 
   describe "create_changeset/2" do
     test "only permitted_keys are casted" do

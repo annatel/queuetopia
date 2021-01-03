@@ -1,4 +1,4 @@
-defmodule Queuetopia.Locks.Lock do
+defmodule Queuetopia.Queue.Lock do
   use Ecto.Schema
   import Ecto.Changeset, only: [cast: 3, unique_constraint: 3, validate_required: 2]
 
@@ -15,7 +15,7 @@ defmodule Queuetopia.Locks.Lock do
     timestamps()
   end
 
-  @spec changeset(Lock.t(), map()) :: Ecto.Changeset.t()
+  @spec changeset(Lock.t(), map) :: Ecto.Changeset.t()
   def changeset(%__MODULE__{} = lock, attrs) when is_map(attrs) do
     lock
     |> cast(attrs, [:scope, :queue, :locked_at, :locked_by_node, :locked_until])

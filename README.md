@@ -15,6 +15,8 @@ A persistant blocking job queue built with Ecto.
 
 - Reactivity — Immediatly try to execute a job that has just been created.
 
+- Scheduled Jobs — Allow to schedule job in the future.
+
 - Retries — Failed jobs are retried with a configurable backoff.
 
 - Persistence — Jobs are stored in a DB and updated after each execution attempt.
@@ -38,7 +40,7 @@ The package can be installed by adding `queuetopia` to your list of dependencies
 ```elixir
 def deps do
   [
-    {:queuetopia, "~> 1.2"}
+    {:queuetopia, "~> 1.3"}
   ]
 end
 ```
@@ -83,21 +85,21 @@ responsible to execute the jobs.
 Define a Queuetopia with a repo and a perfomer like this:
 
 ```elixir
-defmodule MyApp.MailQueue do
+defmodule MyApp.MailQueuetopia do
   use Queuetopia,
     repo: MyApp.Repo,
-    performer: MyApp.MailQueue.Performer
+    performer: MyApp.MailQueuetopia.Performer
 end
 ```
 
-Define the perfomer, adopting the Queuetopia.Jobs.Performer behaviour, like this:
+Define the perfomer, adopting the Queuetopia.Performer behaviour, like this:
 
 ```elixir
-defmodule MyApp.MailQueue.Performer do
-  @behaviour Queuetopia.Jobs.Performer
+defmodule MyApp.MailQueuetopia.Performer do
+  @behaviour Queuetopia.Performer
 
   @impl true
-  def perform(%Queuetopia.Jobs.Job{action: "do_x"}) do
+  def perform(%Queuetopia.Queue.Job{action: "do_x"}) do
     do_x()
   end
 
@@ -117,7 +119,7 @@ defmodule MyApp do
 
   def start(_type, _args) do
     children = [
-      MyApp.MailQueue
+      MyApp.MailQueuetopia
     ]
     Supervisor.start_link(children, strategy: :one_for_one)
   end
@@ -127,14 +129,14 @@ end
 Or, it can be started directly like this:
 
 ```elixir
-MyApp.MailQueue.start_link()
+MyApp.MailQueuetopia.start_link()
 ```
 
 The configuration can be set as below:
 
 ```elixir
  # config/config.exs
-  config :my_app, MyApp.MailQueue,
+  config :my_app, MyApp.MailQueuetopia,
     poll_interval: 60 * 1_000,
     disable?: true
 
@@ -151,15 +153,15 @@ By default, the job timeout is set to 60 seconds, the max backoff to 24 hours an
 
 
 ```elixir
-MyApp.MailQueue.create_job("mails_queue_1", "send_mail", %{email_address: "toto@mail.com", body: "Welcome"}, [timeout: 1_000, max_backoff: 60_000])
+MyApp.MailQueuetopia.create_job("mails_queue_1", "send_mail", %{email_address: "toto@mail.com", body: "Welcome"}, [timeout: 1_000, max_backoff: 60_000])
 ```
 
 So, the mails_queue_1 was born and you can add it other jobs as we do above.
 
-You can wake up the scheduler to run the next pending jobs by calling the `send_poll/0` function.
+You can notify the queuetopia about a new created job.
 
 ```elixir
-MyApp.MailQueue.send_poll()
+MyApp.MailQueuetopia.notify(:new_incoming_job)
 ```
 
 ### One DB, many Queuetopia
