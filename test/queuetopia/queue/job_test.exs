@@ -132,7 +132,7 @@ defmodule Queuetopia.Queue.JobTest do
           attempts: 6,
           attempted_at: Factory.utc_datetime(),
           attempted_by: Atom.to_string(Node.self()),
-          scheduled_at: Factory.utc_datetime(),
+          next_attempt_at: Factory.utc_datetime(),
           error: "error"
         )
 
@@ -142,7 +142,7 @@ defmodule Queuetopia.Queue.JobTest do
       assert :attempts in changes_keys
       assert :attempted_at in changes_keys
       assert :attempted_by in changes_keys
-      assert :scheduled_at in changes_keys
+      assert :next_attempt_at in changes_keys
       assert :error in changes_keys
       assert Enum.count(changes_keys) == 5
 
@@ -158,7 +158,7 @@ defmodule Queuetopia.Queue.JobTest do
       assert %{attempts: ["can't be blank"]} = errors_on(changeset)
       assert %{attempted_at: ["can't be blank"]} = errors_on(changeset)
       assert %{attempted_by: ["can't be blank"]} = errors_on(changeset)
-      assert %{scheduled_at: ["can't be blank"]} = errors_on(changeset)
+      assert %{next_attempt_at: ["can't be blank"]} = errors_on(changeset)
       assert %{error: ["can't be blank"]} = errors_on(changeset)
     end
 
@@ -171,7 +171,7 @@ defmodule Queuetopia.Queue.JobTest do
           attempts: 1,
           attempted_at: utc_datetime,
           attempted_by: Atom.to_string(Node.self()),
-          scheduled_at: utc_datetime,
+          next_attempt_at: utc_datetime,
           error: "error"
         })
 

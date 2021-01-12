@@ -91,6 +91,20 @@ defmodule Queuetopia.JobsTest do
 
       assert is_nil(Queue.get_next_pending_job(TestRepo, scope, queue))
     end
+
+    test "when the next pending job next attempt is scheduled for now" do
+      %Job{queue: queue, scope: scope, id: id} =
+        Factory.insert(:job, next_attempt_at: DateTime.utc_now())
+
+      assert %Job{id: ^id} = Queue.get_next_pending_job(TestRepo, scope, queue)
+    end
+
+    test "when the next pending job next attempt is scheduled for later" do
+      %Job{queue: queue, scope: scope} =
+        Factory.insert(:job, next_attempt_at: DateTime.utc_now() |> DateTime.add(3600, :second))
+
+      assert is_nil(Queue.get_next_pending_job(TestRepo, scope, queue))
+    end
   end
 
   describe "fetch_job/2" do
@@ -128,6 +142,20 @@ defmodule Queuetopia.JobsTest do
 
       assert {:error, "scheduled for later"} = Queue.fetch_job(TestRepo, job)
       assert is_nil(TestRepo.get_by(Lock, scope: scope, queue: queue))
+    end
+
+    test "when the next pending job next attempt is scheduled for now" do
+      %Job{id: id} = job = Factory.insert(:job, next_attempt_at: DateTime.utc_now())
+
+      assert {:ok, %Job{id: ^id}} = Queue.fetch_job(TestRepo, job)
+    end
+
+    test "when the next pending job next attempt is scheduled for later" do
+      %Job{} =
+        job =
+        Factory.insert(:job, next_attempt_at: DateTime.utc_now() |> DateTime.add(3600, :second))
+
+      assert {:error, "scheduled for later"} = Queue.fetch_job(TestRepo, job)
     end
   end
 
@@ -265,10 +293,10 @@ defmodule Queuetopia.JobsTest do
         %Job{
           done_at: nil,
           attempted_at: attempted_at,
-          scheduled_at: scheduled_at
+          next_attempt_at: next_attempt_at
         } = TestRepo.get_by(Job, id: id)
 
-        assert scheduled_at == DateTime.add(attempted_at, backoff, :millisecond)
+        assert next_attempt_at == DateTime.add(attempted_at, backoff, :millisecond)
       end)
     end
 
@@ -282,20 +310,20 @@ defmodule Queuetopia.JobsTest do
       %Job{
         done_at: nil,
         attempted_at: attempted_at,
-        scheduled_at: scheduled_at
+        next_attempt_at: next_attempt_at
       } = TestRepo.get_by(Job, id: id)
 
-      assert scheduled_at == DateTime.add(attempted_at, max_backoff, :millisecond)
+      assert next_attempt_at == DateTime.add(attempted_at, max_backoff, :millisecond)
 
       _ = Queue.persist_result(TestRepo, job, {:error, "error"})
 
       %Job{
         done_at: nil,
         attempted_at: attempted_at,
-        scheduled_at: scheduled_at
+        next_attempt_at: next_attempt_at
       } = TestRepo.get_by(Job, id: id)
 
-      assert scheduled_at == DateTime.add(attempted_at, max_backoff, :millisecond)
+      assert next_attempt_at == DateTime.add(attempted_at, max_backoff, :millisecond)
     end
   end
 

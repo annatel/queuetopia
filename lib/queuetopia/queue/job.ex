@@ -30,6 +30,7 @@ defmodule Queuetopia.Queue.Job do
     field(:attempts, :integer, default: 0)
     field(:attempted_at, :utc_datetime)
     field(:attempted_by, :string)
+    field(:next_attempt_at, :utc_datetime)
     field(:done_at, :utc_datetime)
     field(:error, :string, null: true)
 
@@ -75,9 +76,9 @@ defmodule Queuetopia.Queue.Job do
   @spec failed_job_changeset(Job.t(), map) :: Ecto.Changeset.t()
   def failed_job_changeset(%__MODULE__{} = job, attrs) when is_map(attrs) do
     job
-    |> cast(attrs, [:attempts, :attempted_at, :attempted_by, :scheduled_at, :error])
+    |> cast(attrs, [:attempts, :attempted_at, :attempted_by, :next_attempt_at, :error])
     |> validate_required_attempt_attributes
-    |> validate_required([:scheduled_at, :error])
+    |> validate_required([:next_attempt_at, :error])
   end
 
   @spec succeeded_job_changeset(Job.t(), map) :: Ecto.Changeset.t()

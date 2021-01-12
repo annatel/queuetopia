@@ -82,8 +82,9 @@ defmodule Queuetopia.Queue do
   """
   @spec scheduled_for_now?(Job.t()) :: boolean
   def scheduled_for_now?(%Job{} = job) do
-    is_nil(job.scheduled_at) ||
-      DateTime.compare(DateTime.utc_now(), job.scheduled_at) in [:eq, :gt]
+    DateTime.compare(job.scheduled_at, DateTime.utc_now()) in [:eq, :lt] and
+      (is_nil(job.next_attempt_at) or
+         DateTime.compare(job.next_attempt_at, DateTime.utc_now()) in [:eq, :lt])
   end
 
   @doc """
@@ -177,7 +178,7 @@ defmodule Queuetopia.Queue do
       attempts: job.attempts + 1,
       attempted_at: utc_now,
       attempted_by: Atom.to_string(Node.self()),
-      scheduled_at: utc_now |> DateTime.add(backoff, :millisecond),
+      next_attempt_at: utc_now |> DateTime.add(backoff, :millisecond),
       error: error
     })
     |> repo.update()
