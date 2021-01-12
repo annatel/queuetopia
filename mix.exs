@@ -2,7 +2,7 @@ defmodule Queuetopia.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/annatel/queuetopia"
-  @version "1.3.1"
+  @version "1.4.0"
 
   def project do
     [
@@ -20,7 +20,7 @@ defmodule Queuetopia.MixProject do
   end
 
   defp description() do
-    "the blocking job queue"
+    "Persistent blocking job queue"
   end
 
   def application do
