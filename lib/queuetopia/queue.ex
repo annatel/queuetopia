@@ -6,9 +6,44 @@ defmodule Queuetopia.Queue do
   alias Ecto.Multi
   alias Queuetopia.Sequences
   alias Queuetopia.Queue.{Job, Lock}
+  alias Queuetopia.Queue.JobQueryable
   alias AntlUtilsElixir.Math
 
   @lock_security_retention 1_000
+
+  @type list_options :: [list_option] | []
+
+  @type list_option :: {:filters, keyword} | {:search_query, binary}
+
+  @doc """
+  List jobs by options.
+
+    * `:filters` - keyword list, search in specific field
+
+    * `:search_query` - string, approximative search in fields defined by the JobQueryable
+
+
+  ## Examples
+
+      iex> list_jobs(filters: [action: "foo"])
+      %{data: [%Job{}, ...], total: 10}
+
+  """
+  @spec list_jobs(module, list_options) :: %{data: any, total: any}
+  def list_jobs(repo, opts \\ []) do
+    filters = Keyword.get(opts, :filters, [])
+    search_query = Keyword.get(opts, :search_query)
+
+    query =
+      JobQueryable.queryable()
+      |> JobQueryable.filter(filters)
+      |> JobQueryable.search(search_query)
+      |> order_by(asc: :queue, asc: :scheduled_at)
+
+    jobs = query |> repo.all()
+
+    %{data: jobs, total: Enum.count(jobs)}
+  end
 
   @doc """
   Creates a job, specifying the performer, the Queuetopia (scope), and the user params,

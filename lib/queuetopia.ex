@@ -104,9 +104,12 @@ defmodule Queuetopia do
 
       ## Job options
       A job accepts the following options:
+
         * `:timeout` - The time in milliseconds to wait for the job to
           finish. (default: 60_000)
+
         * `:max_backoff` - default to 24 * 3600 * 1_000
+
         * `:max_attempts` - default to 20.
 
       It is possible to schedule jobs in the future. In this FIFO, the first_in is determined by the scheduled_at.
@@ -121,6 +124,7 @@ defmodule Queuetopia do
               DateTime.utc_now(),
               [timeout: 1_000, max_backoff: 60_000]
             )
+          {:ok, %Job{}}
       """
       @spec create_job(binary, binary, map, DateTime.t(), [Job.option()] | []) ::
               {:error, Ecto.Changeset.t()} | {:ok, Job.t()}
@@ -139,12 +143,22 @@ defmodule Queuetopia do
           )
 
         with {:ok, %Job{}} <- result do
-          listen(:new_incoming_job)
+          handle_event(:new_incoming_job)
         end
 
         result
       end
 
+      def list_jobs(opts \\ []) do
+        Queuetopia.Queue.list_jobs(@repo, opts)
+      end
+
+      def handle_event(:new_incoming_job) do
+        listen(:new_incoming_job)
+      end
+
+      @since "1.5.0"
+      @deprecated "Use handle_event/1 instead"
       def listen(:new_incoming_job) do
         scheduler_pid = Process.whereis(scheduler())
 

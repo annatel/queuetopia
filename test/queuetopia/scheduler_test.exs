@@ -99,7 +99,7 @@ defmodule Queuetopia.SchedulerTest do
     assert_receive {^queue, _, :started}, 2_000
   end
 
-  describe "isolation" do
+  describe "isolation:" do
     test "a slow queue don't slow down the others" do
       scope = TestQueuetopia.scope()
 
@@ -186,7 +186,7 @@ defmodule Queuetopia.SchedulerTest do
     end
   end
 
-  describe "retry" do
+  describe "retry:" do
     test "a failed job will be retried" do
       scope = TestQueuetopia.scope()
 
@@ -253,7 +253,7 @@ defmodule Queuetopia.SchedulerTest do
     end
   end
 
-  describe "failure persistence" do
+  describe "failure persistence:" do
     test "a failed job persists the failure error and set the attempt attributes" do
       scope = TestQueuetopia.scope()
 
@@ -346,7 +346,7 @@ defmodule Queuetopia.SchedulerTest do
     end
   end
 
-  describe "repolls after job performed?" do
+  describe "repolls after job performed?:" do
     test "after a job succeeded" do
       scope = TestQueuetopia.scope()
 

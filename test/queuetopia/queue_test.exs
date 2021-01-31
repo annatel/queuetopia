@@ -1,4 +1,4 @@
-defmodule Queuetopia.JobsTest do
+defmodule Queuetopia.QueueTest do
   use Queuetopia.DataCase
 
   alias Queuetopia.Queue
@@ -159,7 +159,7 @@ defmodule Queuetopia.JobsTest do
     end
   end
 
-  describe "create_job/5" do
+  describe "create_job/8" do
     test "with valid params, returns the created job" do
       params = Factory.params_for(:job)
 
