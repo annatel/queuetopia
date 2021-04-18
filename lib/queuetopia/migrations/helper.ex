@@ -5,7 +5,7 @@ defmodule Queuetopia.Migrations.Helper do
 
   def create_index_if_not_exists(table, columns, opts \\ []) do
     index = struct(%Ecto.Migration.Index{table: table, columns: columns}, opts)
-    index_name = index.name || default_index_name(index) |> to_string()
+    index_name = (index.name || default_index_name(index)) |> to_string()
 
     flush()
     query = "SHOW INDEX FROM #{table};"
