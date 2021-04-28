@@ -14,7 +14,6 @@ jobs:
       mysql:
         image: mysql:5.7
         env:
-          # MYSQL_USER: "root"
           MYSQL_ROOT_PASSWORD: 123456
         ports:
           - 3306:3306
@@ -23,6 +22,7 @@ jobs:
       postgres:
         image: postgres:12-alpine
         env:
+          POSTGRES_DB: queuetopia
           POSTGRES_PASSWORD: postgres
           POSTGRES_USER: postgres
         options: >-
@@ -59,9 +59,14 @@ jobs:
         run: mix format --check-formatted
 
       - name: Run Tests For MySQL adapter (Code coverage)
-        run: |
-          QUEUETOPIA__DATABASE_TEST_URL="ecto://root:123456@localhost:3306/queuetopia" mix test --cover
+        env:
+          MIX_ENV: test 
+          QUEUETOPIA__DATABASE_TEST_URL: ecto://root:123456@localhost:3306/queuetopia
+        run: mix test --cover
       
-      - name: Run Tests (Code coverage)
-        run: |
-          QUEUETOPIA__DATABASE_TEST_URL="ecto://postgres:postgres@localhost/queuetopia" QUEUETOPIA__DATABASE_TEST_ADAPTER=postgres mix test --cover
+      - name: Run Tests For Postgres adapter
+        env:
+          MIX_ENV: test 
+          QUEUETOPIA__DATABASE_TEST_URL: ecto://postgres:postgres@localhost/queuetopia
+          QUEUETOPIA__DATABASE_TEST_ADAPTER: postgres
+        run: mix test
