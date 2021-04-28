@@ -5,6 +5,9 @@ if(Mix.env() == :test) do
 
   config :queuetopia, ecto_repos: [Queuetopia.TestRepo]
 
+  config :queuetopia,
+    use_mysql_adapter?: System.get_env("QUEUETOPIA__DATABASE_TEST_ADAPTER") in [nil, "mysql"]
+
   config :queuetopia, Queuetopia.TestRepo,
     url: System.get_env("QUEUETOPIA__DATABASE_TEST_URL"),
     pool: Ecto.Adapters.SQL.Sandbox

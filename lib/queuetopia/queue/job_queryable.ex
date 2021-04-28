@@ -12,6 +12,10 @@ defmodule Queuetopia.Queue.JobQueryable do
 
   @filterable_fields ~w(id scope queue action available?)a
 
+  defp search_by_field({:params, value}, dynamic, repo_adapter: Ecto.Adapters.Postgres) do
+    dynamic([line], ^dynamic or like(fragment("params::text"), ^"%#{value}%"))
+  end
+
   defp filter_by_field({key, _value}, _queryable) when key not in @filterable_fields do
     raise "Filter not implemented"
   end

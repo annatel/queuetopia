@@ -4,9 +4,15 @@ defmodule Queuetopia.Migrations.V3 do
   use Ecto.Migration
 
   def up do
-    query = "ALTER TABLE queuetopia_jobs ADD COLUMN next_attempt_at datetime AFTER attempted_by;"
+    case repo().__adapter__() do
+      Ecto.Adapters.Postgres ->
+        execute("ALTER TABLE queuetopia_jobs ADD COLUMN next_attempt_at timestamp;")
 
-    Ecto.Adapters.SQL.query!(repo(), query, [])
+      Ecto.Adapters.MyXQL ->
+        execute(
+          "ALTER TABLE queuetopia_jobs ADD COLUMN next_attempt_at datetime AFTER attempted_by;"
+        )
+    end
   end
 
   def down do

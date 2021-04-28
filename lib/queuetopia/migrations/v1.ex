@@ -2,7 +2,6 @@ defmodule Queuetopia.Migrations.V1 do
   @moduledoc false
 
   use Ecto.Migration
-  alias Queuetopia.Migrations.Helper
 
   def up do
     create_sequences_table()
@@ -23,15 +22,17 @@ defmodule Queuetopia.Migrations.V1 do
       timestamps()
     end
 
-    Helper.create_index_if_not_exists(:queuetopia_sequences, [:sequence])
+    create(index(:queuetopia_sequences, [:sequence]))
 
     utc_now = DateTime.utc_now() |> DateTime.to_naive()
 
-    repo().query!(
-      "INSERT into queuetopia_sequences(`sequence`, `inserted_at`, `updated_at`) VALUE (0, '#{
-        utc_now
-      }', '#{utc_now}');"
-    )
+    execute(fn ->
+      repo().query!(
+        "INSERT into queuetopia_sequences(sequence, inserted_at, updated_at) VALUES (0, '#{
+          utc_now
+        }', '#{utc_now}');"
+      )
+    end)
   end
 
   defp drop_sequences_table do
@@ -50,9 +51,8 @@ defmodule Queuetopia.Migrations.V1 do
       timestamps()
     end
 
-    Helper.create_index_if_not_exists(:queuetopia_locks, [:scope, :queue],
-      name: :queuetopia_locks_scope_queue_index,
-      unique: true
+    create(
+      unique_index(:queuetopia_locks, [:scope, :queue], name: :queuetopia_locks_scope_queue_index)
     )
   end
 
@@ -83,14 +83,12 @@ defmodule Queuetopia.Migrations.V1 do
       timestamps()
     end
 
-    Helper.create_index_if_not_exists(:queuetopia_jobs, [:sequence])
+    create(index(:queuetopia_jobs, [:sequence]))
 
-    Helper.create_index_if_not_exists(:queuetopia_jobs, [:scope, :queue],
-      name: :queuetopia_jobs_scope_queue_index
-    )
+    create(index(:queuetopia_jobs, [:scope, :queue], name: :queuetopia_jobs_scope_queue_index))
 
-    Helper.create_index_if_not_exists(:queuetopia_jobs, [:scheduled_at])
-    Helper.create_index_if_not_exists(:queuetopia_jobs, [:done_at])
+    create(index(:queuetopia_jobs, [:scheduled_at]))
+    create(index(:queuetopia_jobs, [:done_at]))
   end
 
   defp drop_jobs_table do

@@ -37,7 +37,7 @@ defmodule Queuetopia.Queue do
     query =
       JobQueryable.queryable()
       |> JobQueryable.filter(filters)
-      |> JobQueryable.search(search_query)
+      |> JobQueryable.search(search_query, repo_adapter: repo.__adapter__())
       |> order_by(asc: :queue, asc: :scheduled_at)
 
     jobs = query |> repo.all()

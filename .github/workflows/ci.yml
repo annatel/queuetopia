@@ -20,6 +20,18 @@ jobs:
           - 3306:3306
         options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
 
+      postgres:
+        image: postgres:12-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432/tcp
     steps:
       - uses: actions/checkout@v2
       - name: Setup elixir
@@ -46,7 +58,10 @@ jobs:
       - name: Linter
         run: mix format --check-formatted
 
+      - name: Run Tests For MySQL adapter (Code coverage)
+        run: |
+          QUEUETOPIA__DATABASE_TEST_URL="ecto://root:123456@localhost:3306/queuetopia" mix test --cover
+      
       - name: Run Tests (Code coverage)
         run: |
-          source env/ci.env
-          mix test --cover
+          QUEUETOPIA__DATABASE_TEST_URL="ecto://postgres:postgres@localhost/queuetopia" QUEUETOPIA__DATABASE_TEST_ADAPTER=postgres mix test --cover
