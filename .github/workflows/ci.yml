@@ -47,11 +47,11 @@ jobs:
           path: deps
           key: ${{ runner.os }}-mix-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
 
-      # - uses: actions/cache@v1
-      #   id: build-cache
-      #   with:
-      #     path: _build
-      #     key: ${{ runner.os }}-build-${{ matrix.otp }}-${{ matrix.elixir }}-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+      - uses: actions/cache@v1
+        id: build-cache
+        with:
+          path: _build
+          key: ${{ runner.os }}-build-${{ matrix.otp }}-${{ matrix.elixir }}-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
 
       - name: Install Dependencies
         run: mix deps.get
@@ -70,4 +70,6 @@ jobs:
           MIX_ENV: test 
           QUEUETOPIA__DATABASE_TEST_URL: ecto://postgres:postgres@localhost/queuetopia
           QUEUETOPIA__DATABASE_TEST_ADAPTER: postgres
-        run: mix test
+        run: | 
+          rm -rf _build/test/lib/queuetopia
+          mix test
