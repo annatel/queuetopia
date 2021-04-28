@@ -68,7 +68,7 @@ jobs:
       - name: Run Tests For Postgres adapter
         env:
           MIX_ENV: test 
-          QUEUETOPIA__DATABASE_TEST_URL: ecto://postgres:postgres@localhost/queuetopia
+          QUEUETOPIA__DATABASE_TEST_URL: ecto://postgres:postgres@localhost:5432/queuetopia
           QUEUETOPIA__DATABASE_TEST_ADAPTER: postgres
         run: | 
           rm -rf _build/test/lib/queuetopia
