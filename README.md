@@ -40,7 +40,7 @@ The package can be installed by adding `queuetopia` to your list of dependencies
 ```elixir
 def deps do
   [
-    {:queuetopia, "~> 1.5.1"}
+    {:queuetopia, "~> 1.6.0"}
   ]
 end
 ```
@@ -60,11 +60,11 @@ defmodule MyApp.Repo.Migrations.CreateQueuetopiaTables do
   use Ecto.Migration
 
   def up do
-    Queuetopia.Migrations.V1.up
+    Queuetopia.Migrations.up()
   end
 
   def down do
-    Queuetopia.Migrations.V1.down
+    Queuetopia.Migrations.down()
   end
 end
 ```
