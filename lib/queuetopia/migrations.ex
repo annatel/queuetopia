@@ -1,11 +1,11 @@
 defmodule Queuetopia.Migrations do
   use Ecto.Migration
 
-  @initial_version 1
+  @initial_version 0
   @current_version 3
 
   def up(opts \\ []) when is_list(opts) do
-    from_version = Keyword.get(opts, :from_version, @initial_version)
+    from_version = Keyword.get(opts, :from_version, @initial_version) |> Kernel.+(1)
     to_version = Keyword.get(opts, :to_version, @current_version)
 
     if from_version <= to_version do
@@ -15,7 +15,7 @@ defmodule Queuetopia.Migrations do
 
   def down(opts \\ []) when is_list(opts) do
     from_version = Keyword.get(opts, :from_version, @current_version)
-    to_version = Keyword.get(opts, :to_version, @initial_version)
+    to_version = Keyword.get(opts, :to_version, @initial_version) |> Kernel.+(1)
 
     if from_version >= to_version do
       change(from_version..to_version, :down)
