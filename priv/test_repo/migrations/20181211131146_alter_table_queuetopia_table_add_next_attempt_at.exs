@@ -6,6 +6,6 @@ defmodule Queuetopia.TestRepo.Migrations.AlterTableQueuetopiaTableAddNextAttempt
   end
 
   def down do
-    Queuetopia.Migrations.down(from_version: 3, to_version: 2)
+    Queuetopia.Migrations.down(to_version: 2)
   end
 end
