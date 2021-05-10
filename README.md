@@ -60,11 +60,11 @@ defmodule MyApp.Repo.Migrations.CreateQueuetopiaTables do
   use Ecto.Migration
 
   def up do
-    Queuetopia.Migrations.V1.up
+    Queuetopia.Migrations.up()
   end
 
   def down do
-    Queuetopia.Migrations.V1.down
+    Queuetopia.Migrations.down()
   end
 end
 ```

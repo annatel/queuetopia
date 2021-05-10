@@ -2,13 +2,10 @@ defmodule Queuetopia.TestRepo.Migrations.AlterTableQueuetopiaTableAddNextAttempt
   use Ecto.Migration
 
   def up do
-    Queuetopia.Migrations.V2.up()
-    Queuetopia.Migrations.V3.up()
+    Queuetopia.Migrations.up(from_version: 2, to_version: 3)
   end
 
   def down do
-    Queuetopia.Migrations.V3.down()
+    Queuetopia.Migrations.down(from_version: 3, to_version: 2)
   end
-
-
 end
