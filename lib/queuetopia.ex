@@ -149,6 +149,48 @@ defmodule Queuetopia do
         result
       end
 
+      @doc """
+      Similar to `c:create_job/5` but raises if the changeset is not valid.
+
+      Raises if more than one entry.
+
+
+      ## Examples
+
+          iex> MyApp.MailQueuetopia.create_job!(
+              "mails_queue_1",
+              "send_mail",
+              %{email_address: "toto@mail.com", body: "Welcome"},
+              DateTime.utc_now(),
+              [timeout: 1_000, max_backoff: 60_000]
+            )
+          %Job{}
+      """
+      @spec create_job!(binary, binary, map, DateTime.t(), [Job.option()] | []) ::
+              Job.t()
+      def create_job!(queue, action, params, scheduled_at \\ DateTime.utc_now(), opts \\ [])
+          when is_binary(queue) and is_binary(action) and is_map(params) do
+        Queuetopia.Queue.create_job(
+          @repo,
+          @performer,
+          @scope,
+          queue,
+          action,
+          params,
+          scheduled_at,
+          opts
+        )
+        |> case do
+          {:ok, %Job{} = job} ->
+            handle_event(:new_incoming_job)
+
+            job
+
+          {:error, %Ecto.Changeset{} = changeset} ->
+            raise Ecto.InvalidChangesetError, action: :insert, changeset: changeset
+        end
+      end
+
       def list_jobs(opts \\ []) do
         Queuetopia.Queue.list_jobs(@repo, opts)
       end
