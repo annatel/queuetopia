@@ -40,7 +40,7 @@ The package can be installed by adding `queuetopia` to your list of dependencies
 ```elixir
 def deps do
   [
-    {:queuetopia, "~> 1.6.0"}
+    {:queuetopia, "~> 1.7.0"}
   ]
 end
 ```
@@ -153,12 +153,18 @@ By default, the job timeout is set to 60 seconds, the max backoff to 24 hours an
 
 
 ```elixir
+MyApp.MailQueuetopia.create_job!("mails_queue_1", "send_mail", %{email_address: "toto@mail.com", body: "Welcome"}, [timeout: 1_000, max_backoff: 60_000])
+```
+or
+
+```elixir
 MyApp.MailQueuetopia.create_job("mails_queue_1", "send_mail", %{email_address: "toto@mail.com", body: "Welcome"}, [timeout: 1_000, max_backoff: 60_000])
 ```
+to handle changeset errors.
 
 So, the mails_queue_1 was born and you can add it other jobs as we do above.
-
-You can notify the queuetopia about a new created job.
+When the job creation is out of transaction, Queuetopia is automatically notified about the new job.
+Anyway, you can notify the queuetopia about a new created job.
 
 ```elixir
 MyApp.MailQueuetopia.notify(:new_incoming_job)
