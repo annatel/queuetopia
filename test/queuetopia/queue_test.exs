@@ -315,12 +315,14 @@ defmodule Queuetopia.QueueTest do
       backoff = Queuetopia.TestPerfomerWithBackoff.backoff(job)
       assert backoff == 20 * 1_000
 
-      assert next_attempt_at ==
-               DateTime.add(
-                 attempted_at,
-                 backoff,
-                 :millisecond
-               )
+      assert_in_delta next_attempt_at |> DateTime.to_unix(),
+                      DateTime.add(
+                        attempted_at,
+                        backoff,
+                        :millisecond
+                      )
+                      |> DateTime.to_unix(),
+                      1
     end
 
     test "for default backoff, limit to maximum backoff" do
