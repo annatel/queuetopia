@@ -7,7 +7,6 @@ defmodule Queuetopia.Queue do
   alias Queuetopia.Sequences
   alias Queuetopia.Queue.{Job, Lock}
   alias Queuetopia.Queue.JobQueryable
-  
 
   @lock_security_retention 1_000
 
