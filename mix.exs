@@ -2,7 +2,7 @@ defmodule Queuetopia.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/annatel/queuetopia"
-  @version "1.7.0"
+  @version "1.8.0"
 
   def project do
     [
@@ -31,7 +31,7 @@ defmodule Queuetopia.MixProject do
 
   defp deps do
     [
-      {:ecto_sql, "~> 3.4"},
+      {:ecto_sql, "~> 3.6"},
       {:recase, "~> 0.7.0"},
       {:myxql, "~> 0.4.0", only: :test},
       {:jason, "~> 1.0"},
