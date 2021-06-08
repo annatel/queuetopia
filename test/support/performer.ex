@@ -1,5 +1,5 @@
 defmodule Queuetopia.TestPerfomer do
-  @behaviour Queuetopia.Performer
+  use Queuetopia.Performer
 
   alias Queuetopia.Queue.Job
   alias Queuetopia.Factory
