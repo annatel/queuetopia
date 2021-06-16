@@ -28,9 +28,7 @@ defmodule Queuetopia.Migrations.V1 do
     utc_now = DateTime.utc_now() |> DateTime.to_naive()
 
     repo().query!(
-      "INSERT into queuetopia_sequences(`sequence`, `inserted_at`, `updated_at`) VALUE (0, '#{
-        utc_now
-      }', '#{utc_now}');"
+      "INSERT into queuetopia_sequences(`sequence`, `inserted_at`, `updated_at`) VALUE (0, '#{utc_now}', '#{utc_now}');"
     )
   end
 
