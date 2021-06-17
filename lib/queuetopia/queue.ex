@@ -83,7 +83,7 @@ defmodule Queuetopia.Queue do
   defp create_job_multi(attrs) do
     Multi.new()
     |> Multi.run(:sequence, fn repo, %{} ->
-      {:ok, Sequences.next(:queuetopia_sequences, repo)}
+      {:ok, Sequences.next_value!(:queuetopia_sequences, repo)}
     end)
     |> Multi.insert(:job, fn %{sequence: sequence} ->
       attrs
