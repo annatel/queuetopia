@@ -27,7 +27,7 @@ jobs:
     strategy:
       matrix:
         otp: ["22.2"]
-        elixir: ["1.10.3", "1.11.2", "1.12"]
+        elixir: ["1.11.2", "1.12"]
         db_repo_adapter: ["myxql", "postgres"]
 
     services:
