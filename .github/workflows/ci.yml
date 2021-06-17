@@ -32,7 +32,6 @@ jobs:
 
     services:
       mysql:
-        if: ${{ matrix.db_repo_adapter == 'myxql' }}
         image: mysql:5.7
         env:
           MYSQL_ROOT_PASSWORD: 123456
@@ -41,7 +40,6 @@ jobs:
         options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
 
       postgres:
-        if: ${{ matrix.db_repo_adapter == 'postgres' }}
         image: postgres:12-alpine
         env:
           POSTGRES_PASSWORD: postgres
