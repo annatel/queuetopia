@@ -39,7 +39,7 @@ defmodule Queuetopia.MixProject do
       {:antl_utils_ecto, "2.2.0"},
       {:ex_machina, "~> 2.4", only: :test},
       {:mox, "~> 0.5", only: :test},
-      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.24", only: :dev, runtime: false}
     ]
   end
 
