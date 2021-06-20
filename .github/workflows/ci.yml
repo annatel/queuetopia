@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Setup elixir
-        uses: actions/setup-elixir@v1
+        uses: erlef/setup-elixir@v1
         with:
           otp-version: ${{ matrix.otp }}
           elixir-version: ${{ matrix.elixir }}
@@ -22,27 +22,40 @@ jobs:
         run: mix format --check-formatted
 
   mix_test:
-    name: mix test (Elixir ${{ matrix.elixir }} OTP ${{ matrix.otp }})
+    name: mix test (Elixir ${{ matrix.elixir }} OTP ${{ matrix.otp }} Database Repo Adapter ${{ matrix.db_repo_adapter }})
     runs-on: ubuntu-18.04
     strategy:
       matrix:
         otp: ["22.2"]
-        elixir: ["1.10.3", "1.11.2", "1.12"]
+        elixir: ["1.11", "1.12"]
+        db_repo_adapter: ["myxql", "postgres"]
 
     services:
       mysql:
         image: mysql:5.7
         env:
-          # MYSQL_USER: "root"
           MYSQL_ROOT_PASSWORD: 123456
         ports:
           - 3306:3306
         options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
 
+      postgres:
+        image: postgres:12-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
     steps:
       - uses: actions/checkout@v2
       - name: Setup elixir
-        uses: actions/setup-elixir@v1
+        uses: erlef/setup-elixir@v1
         with:
           otp-version: ${{ matrix.otp }}
           elixir-version: ${{ matrix.elixir }}
@@ -57,12 +70,22 @@ jobs:
         id: build-cache
         with:
           path: _build
-          key: ${{ runner.os }}-build-${{ matrix.otp }}-${{ matrix.elixir }}-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+          key: ${{ runner.os }}-build-${{ matrix.otp }}-${{ matrix.elixir }}-${{ matrix.db_repo_adapter }}-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
 
       - name: Install Dependencies
         run: mix deps.get
 
+      - name: Set DATABASE_TEST_URL env
+        if: ${{ matrix.db_repo_adapter == 'myxql' }}
+        run: echo "database_test_url=ecto://root:123456@localhost:3306/queuetopia" >> $GITHUB_ENV
+
+      - name: Set DATABASE_TEST_URL env
+        if: ${{ matrix.db_repo_adapter == 'postgres' }}
+        run: echo "database_test_url=ecto://postgres:postgres@localhost/queuetopia" >> $GITHUB_ENV
+
       - name: Run Tests (Code coverage)
-        run: |
-          source env/ci.env
-          mix test --cover
+        env:
+          MIX_ENV: test
+          QUEUETOPIA__DATABASE_TEST_URL: ${{ env.database_test_url}}
+          QUEUETOPIA__DATABASE_TEST_REPO_ADAPTER: ${{ matrix.db_repo_adapter }}
+        run: mix test --cover
