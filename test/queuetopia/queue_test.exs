@@ -433,6 +433,126 @@ defmodule Queuetopia.QueueTest do
     assert TestRepo.all(Lock) == []
   end
 
+  describe "paginate_jobs/2" do
+    test "returns a list of the jobs" do
+      %{id: id} = Factory.insert(:job)
+
+      assert %{data: [%Job{id: ^id}], page_size: 100, page_number: 1, total: 1} =
+               Queue.paginate_jobs(TestRepo, 100, 1)
+    end
+
+    test "order_by" do
+      %{id: id1} = Factory.insert(:job, sequence: 1)
+      %{id: id2} = Factory.insert(:job, sequence: 2)
+
+      assert %{data: [%{id: ^id2}, %{id: ^id1}]} = Queue.paginate_jobs(TestRepo, 100, 1)
+
+      assert %{data: [%{id: ^id1}, %{id: ^id2}]} =
+               Queue.paginate_jobs(TestRepo, 100, 1, order_by_fields: [asc: :sequence])
+    end
+
+    test "filters" do
+      Factory.insert(:job, done_at: DateTime.utc_now())
+
+      assert %{data: [], total: 0} =
+               Queue.paginate_jobs(TestRepo, 100, 1, filters: [available?: true])
+
+      %{id: id} = job = Factory.insert(:job)
+
+      [
+        [id: job.id],
+        [scope: job.scope],
+        [queue: job.queue],
+        [action: job.action],
+        [available?: true]
+      ]
+      |> Enum.each(fn filter ->
+        assert %{data: [%{id: ^id}], total: 1} =
+                 Queue.paginate_jobs(TestRepo, 100, 1, filters: filter)
+      end)
+
+      [
+        [id: Factory.uuid()],
+        [scope: "wrong"],
+        [queue: "wrong"],
+        [action: "wrong"]
+      ]
+      |> Enum.each(fn filter ->
+        assert %{data: [], total: 0} = Queue.paginate_jobs(TestRepo, 100, 1, filters: filter)
+      end)
+    end
+
+    test "search_query" do
+      %{id: id} = job = Factory.insert(:job, params: %{a: "param_a"})
+
+      [job.scope, job.queue, job.action, "param_a"]
+      |> Enum.each(fn search_query ->
+        assert %{data: [%{id: ^id}], total: 1} =
+                 Queue.paginate_jobs(TestRepo, 100, 1, search_query: search_query)
+      end)
+
+      assert %{data: [], total: 0} = Queue.paginate_jobs(TestRepo, 100, 1, search_query: "wrong")
+    end
+  end
+
+  describe "list_jobs/2" do
+    test "returns a list of the jobs" do
+      %{id: id} = Factory.insert(:job)
+
+      assert [%Job{id: ^id}] = Queue.list_jobs(TestRepo)
+    end
+
+    test "order_by" do
+      %{id: id1} = Factory.insert(:job, sequence: 1)
+      %{id: id2} = Factory.insert(:job, sequence: 2)
+
+      assert [%{id: ^id2}, %{id: ^id1}] = Queue.list_jobs(TestRepo)
+
+      assert [%{id: ^id1}, %{id: ^id2}] =
+               Queue.list_jobs(TestRepo, order_by_fields: [asc: :sequence])
+    end
+
+    test "filters" do
+      Factory.insert(:job, done_at: DateTime.utc_now())
+
+      assert Queue.list_jobs(TestRepo, filters: [available?: true]) == []
+
+      %{id: id} = job = Factory.insert(:job)
+
+      [
+        [id: job.id],
+        [scope: job.scope],
+        [queue: job.queue],
+        [action: job.action],
+        [available?: true]
+      ]
+      |> Enum.each(fn filter ->
+        assert [%{id: ^id}] = Queue.list_jobs(TestRepo, filters: filter)
+      end)
+
+      [
+        [id: Factory.uuid()],
+        [scope: "wrong"],
+        [queue: "wrong"],
+        [action: "wrong"]
+      ]
+      |> Enum.each(fn filter ->
+        assert Queue.list_jobs(TestRepo, filters: filter) == []
+      end)
+    end
+
+    test "search_query" do
+      %{id: id} = job = Factory.insert(:job, params: %{a: "param_a"})
+
+      [job.scope, job.queue, job.action, "param_a"]
+      |> Enum.each(fn search_query ->
+        assert [%{id: ^id}] = Queue.list_jobs(TestRepo, search_query: search_query)
+      end)
+
+      assert Queue.list_jobs(TestRepo, search_query: "wrong") == []
+    end
+  end
+
   defp all_locks(scope) do
     Lock |> Ecto.Query.where(scope: ^scope) |> TestRepo.all()
   end

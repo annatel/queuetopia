@@ -16,32 +16,43 @@ defmodule Queuetopia.Queue do
 
   @doc """
   List jobs by options.
-
-    * `:filters` - keyword list, search in specific field
-
-    * `:search_query` - string, approximative search in fields defined by the JobQueryable
-
-
-  ## Examples
-
-      iex> list_jobs(filters: [action: "foo"])
-      %{data: [%Job{}, ...], total: 10}
-
   """
-  @spec list_jobs(module, list_options) :: %{data: any, total: any}
+  @spec list_jobs(module, list_options) :: [Job.t()]
   def list_jobs(repo, opts \\ []) do
+    job_queryable(opts) |> repo.all()
+  end
+
+  @doc """
+  Paginate jobs
+  """
+  @spec paginate_jobs(module, pos_integer, pos_integer, list_options) :: %{
+          data: [Job.t()],
+          total: any,
+          page_size: pos_integer,
+          page_number: pos_integer
+        }
+  def paginate_jobs(repo, page_size, page_number, opts \\ [])
+      when is_integer(page_number) and is_integer(page_size) do
+    query = job_queryable(opts)
+
+    %{
+      data: query |> JobQueryable.paginate(page_size, page_number) |> repo.all(),
+      total: query |> repo.aggregate(:count, :id),
+      page_number: page_number,
+      page_size: page_size
+    }
+  end
+
+  defp job_queryable(opts) do
     filters = Keyword.get(opts, :filters, [])
     search_query = Keyword.get(opts, :search_query)
+    order_bys = Keyword.get(opts, :order_by_fields, desc: :sequence)
 
-    query =
-      JobQueryable.queryable()
-      |> JobQueryable.filter(filters)
-      |> JobQueryable.search(search_query)
-      |> order_by(asc: :queue, asc: :scheduled_at)
-
-    jobs = query |> repo.all()
-
-    %{data: jobs, total: Enum.count(jobs)}
+    JobQueryable.queryable()
+    |> JobQueryable.filter(filters)
+    |> JobQueryable.search(search_query)
+    |> JobQueryable.order_by(order_bys)
+    |> Ecto.Queryable.to_query()
   end
 
   @doc """

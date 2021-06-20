@@ -138,71 +138,16 @@ defmodule QueuetopiaTest do
     end
   end
 
-  describe "list_jobs/1" do
-    test "list the jobs order by queue and scheduled_at asc" do
-      utc_now = DateTime.utc_now()
+  test "list_jobs/1" do
+    %{id: id} = Factory.insert(:job)
 
-      %{id: id_1} =
-        Factory.insert(:success_job, queue: "foo", scheduled_at: utc_now |> DateTime.add(2400))
+    assert [%{id: ^id}] = TestQueuetopia.list_jobs()
+  end
 
-      %{id: id_2} =
-        Factory.insert(:success_job, queue: "foo", scheduled_at: utc_now |> DateTime.add(1200))
+  test "paginate_jobs/1" do
+    %{id: id} = Factory.insert(:job)
 
-      %{id: id_3} =
-        Factory.insert(:success_job, queue: "bar", scheduled_at: utc_now |> DateTime.add(2400))
-
-      %{id: id_4} =
-        Factory.insert(:success_job, queue: "bar", scheduled_at: utc_now |> DateTime.add(1200))
-
-      assert %{data: [%{id: ^id_4}, %{id: ^id_3}, %{id: ^id_2}, %{id: ^id_1}], total: 4} =
-               TestQueuetopia.list_jobs()
-    end
-
-    test "filters" do
-      %{id: id} = job = Factory.insert(:success_job)
-
-      assert %{data: [%{id: ^id}], total: 1} = TestQueuetopia.list_jobs(filters: [id: job.id])
-
-      assert %{data: [%{id: ^id}], total: 1} =
-               TestQueuetopia.list_jobs(filters: [scope: job.scope])
-
-      assert %{data: [%{id: ^id}], total: 1} =
-               TestQueuetopia.list_jobs(filters: [queue: job.queue])
-
-      assert %{data: [%{id: ^id}], total: 1} =
-               TestQueuetopia.list_jobs(filters: [action: job.action])
-
-      assert %{data: [%{id: ^id}], total: 1} =
-               TestQueuetopia.list_jobs(filters: [available?: true])
-
-      assert_raise RuntimeError, "Filter not implemented", fn ->
-        TestQueuetopia.list_jobs(filters: [params: job.params])
-      end
-
-      assert %{data: [], total: 0} = TestQueuetopia.list_jobs(filters: [id: Factory.uuid()])
-      assert %{data: [], total: 0} = TestQueuetopia.list_jobs(filters: [scope: "foo"])
-      assert %{data: [], total: 0} = TestQueuetopia.list_jobs(filters: [queue: "foo"])
-      assert %{data: [], total: 0} = TestQueuetopia.list_jobs(filters: [action: "foo"])
-    end
-
-    test "search_query" do
-      %{id: id} = job = Factory.insert(:success_job, params: %{foo: "bar"})
-
-      assert %{data: [%{id: ^id}], total: 1} =
-               TestQueuetopia.list_jobs(search_query: job.scope |> String.slice(1..10))
-
-      assert %{data: [%{id: ^id}], total: 1} =
-               TestQueuetopia.list_jobs(search_query: job.queue |> String.slice(1..10))
-
-      assert %{data: [%{id: ^id}], total: 1} =
-               TestQueuetopia.list_jobs(search_query: job.action |> String.slice(1..10))
-
-      assert %{data: [%{id: ^id}], total: 1} = TestQueuetopia.list_jobs(search_query: "ar")
-
-      assert %{data: [%{id: ^id}], total: 1} = TestQueuetopia.list_jobs(search_query: "oo")
-
-      assert %{data: [], total: 0} = TestQueuetopia.list_jobs(search_query: "baz")
-    end
+    assert %{data: [%{id: ^id}], total: 1} = TestQueuetopia.paginate_jobs(100, 1)
   end
 
   describe "handle_event/1" do

@@ -191,8 +191,20 @@ defmodule Queuetopia do
         end
       end
 
+      @spec list_jobs(Queue.list_options()) :: [Job.t()]
       def list_jobs(opts \\ []) do
         Queuetopia.Queue.list_jobs(@repo, opts)
+      end
+
+      @spec paginate_jobs(pos_integer, pos_integer, Queue.list_options()) :: %{
+              data: [Job.t()],
+              total: any,
+              page_size: pos_integer,
+              page_number: pos_integer
+            }
+      def paginate_jobs(page_size, page_number, opts \\ [])
+          when is_integer(page_number) and is_integer(page_size) and is_list(opts) do
+        Queuetopia.Queue.paginate_jobs(@repo, page_size, page_number, opts)
       end
 
       def handle_event(:new_incoming_job) do
