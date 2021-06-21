@@ -139,13 +139,13 @@ defmodule QueuetopiaTest do
   end
 
   test "list_jobs/1" do
-    %{id: id} = Factory.insert(:job)
+    %{id: id} = Factory.insert!(:job)
 
     assert [%{id: ^id}] = TestQueuetopia.list_jobs()
   end
 
   test "paginate_jobs/1" do
-    %{id: id} = Factory.insert(:job)
+    %{id: id} = Factory.insert!(:job)
 
     assert %{data: [%{id: ^id}], total: 1} = TestQueuetopia.paginate_jobs(100, 1)
   end

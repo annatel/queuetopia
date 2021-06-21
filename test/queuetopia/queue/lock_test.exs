@@ -32,7 +32,7 @@ defmodule Queuetopia.Queue.LockTest do
     end
 
     test "when a lock on a scoped queue already exists, returns a changeset error on insert" do
-      %Lock{queue: queue, scope: scope} = Factory.insert(:lock)
+      %Lock{queue: queue, scope: scope} = Factory.insert!(:lock)
 
       params = Factory.params_for(:lock, queue: queue, scope: scope)
 

@@ -7,7 +7,7 @@ defmodule Queuetopia.Test.AssertionsTest do
       scope = Queuetopia.TestQueuetopia.scope()
       queuetopia = Module.safe_concat([scope])
 
-      Factory.insert(:job, scope: scope)
+      Factory.insert!(:job, scope: scope)
 
       assert_job_created(queuetopia)
     end
@@ -22,7 +22,7 @@ defmodule Queuetopia.Test.AssertionsTest do
 
   describe "assert_job_created/2 for a specific queue" do
     test "when the job has just been created" do
-      job = Factory.insert(:job, scope: Queuetopia.TestQueuetopia.scope())
+      job = Factory.insert!(:job, scope: Queuetopia.TestQueuetopia.scope())
 
       assert_job_created(Queuetopia.TestQueuetopia, job.queue)
     end
@@ -41,7 +41,7 @@ defmodule Queuetopia.Test.AssertionsTest do
         |> ExUnit.AssertionError.message()
 
       assert_raise ExUnit.AssertionError, message, fn ->
-        Factory.insert(:job, scope: Queuetopia.TestQueuetopia.scope())
+        Factory.insert!(:job, scope: Queuetopia.TestQueuetopia.scope())
 
         assert_job_created(Queuetopia.TestQueuetopia, "sample_queue")
       end
@@ -69,7 +69,7 @@ defmodule Queuetopia.Test.AssertionsTest do
   describe "assert_job_created/2 for a specific job" do
     test "when the job has just been created" do
       %{id: job_id} =
-        Factory.insert(:job, scope: Queuetopia.TestQueuetopia.scope(), params: %{b: 1, c: 2})
+        Factory.insert!(:job, scope: Queuetopia.TestQueuetopia.scope(), params: %{b: 1, c: 2})
 
       job = Queuetopia.TestQueuetopia.repo().get(Queuetopia.Queue.Job, job_id)
       assert_job_created(Queuetopia.TestQueuetopia, job)
@@ -121,7 +121,7 @@ defmodule Queuetopia.Test.AssertionsTest do
   describe "assert_job_created/3 for a specific job and a specific queue" do
     test "when the job has just been created" do
       %{id: job_id} =
-        Factory.insert(:job, scope: Queuetopia.TestQueuetopia.scope(), params: %{b: 1, c: 2})
+        Factory.insert!(:job, scope: Queuetopia.TestQueuetopia.scope(), params: %{b: 1, c: 2})
 
       job = Queuetopia.TestQueuetopia.repo().get(Queuetopia.Queue.Job, job_id)
       assert_job_created(Queuetopia.TestQueuetopia, job.queue, job)
@@ -165,7 +165,7 @@ defmodule Queuetopia.Test.AssertionsTest do
 
     test "when the job has not been created for the queue" do
       assert_raise ExUnit.AssertionError, fn ->
-        job = Factory.insert(:job, scope: Queuetopia.TestQueuetopia.scope())
+        job = Factory.insert!(:job, scope: Queuetopia.TestQueuetopia.scope())
 
         assert_job_created(Queuetopia.TestQueuetopia, "sample_queue", job)
       end
@@ -186,7 +186,7 @@ defmodule Queuetopia.Test.AssertionsTest do
     end
 
     test "when the job is created" do
-      job = Factory.insert(:job, scope: Queuetopia.TestQueuetopia.scope())
+      job = Factory.insert!(:job, scope: Queuetopia.TestQueuetopia.scope())
 
       message =
         %ExUnit.AssertionError{
@@ -212,7 +212,7 @@ defmodule Queuetopia.Test.AssertionsTest do
     end
 
     test "when the job is created" do
-      job = Factory.insert(:job, scope: Queuetopia.TestQueuetopia.scope(), queue: "queue_name")
+      job = Factory.insert!(:job, scope: Queuetopia.TestQueuetopia.scope(), queue: "queue_name")
 
       message =
         %ExUnit.AssertionError{
@@ -239,7 +239,7 @@ defmodule Queuetopia.Test.AssertionsTest do
 
     test "when the job is created" do
       job =
-        Factory.insert(:job,
+        Factory.insert!(:job,
           scope: Queuetopia.TestQueuetopia.scope(),
           queue: "queue_name",
           action: "foo",
@@ -274,7 +274,7 @@ defmodule Queuetopia.Test.AssertionsTest do
 
     test "when the job is created" do
       job =
-        Factory.insert(:job,
+        Factory.insert!(:job,
           scope: Queuetopia.TestQueuetopia.scope(),
           queue: "queue_name",
           action: "foo",
