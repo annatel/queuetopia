@@ -1,89 +1,79 @@
 defmodule Queuetopia.Factory do
-  use ExMachina.Ecto, repo: Queuetopia.TestRepo
+  use AntlUtilsEcto.Factory, repo: Queuetopia.TestRepo
 
   alias Queuetopia.Queue.Job
   alias Queuetopia.Queue.Lock
 
-  @job_performer Queuetopia.TestPerfomer
+  @performer Queuetopia.TestPerfomer |> to_string()
 
-  @spec uuid :: <<_::288>>
-  def uuid() do
-    Ecto.UUID.generate()
-  end
-
-  @spec utc_datetime :: DateTime.t()
-  def utc_datetime() do
-    DateTime.from_naive!(~N[2018-12-19T00:00:00Z], "Etc/UTC")
-  end
-
-  @spec lock_factory :: Queuetopia.Queue.Lock.t()
-  def lock_factory do
-    locked_at = DateTime.utc_now() |> DateTime.truncate(:second)
-    locked_until = locked_at |> DateTime.add(3600, :second) |> DateTime.truncate(:second)
+  def build(:lock, attrs) do
+    locked_at = utc_now()
+    locked_until = locked_at |> add(3600, :second)
 
     %Lock{
-      scope: sequence("scope_"),
-      queue: sequence("queue_"),
+      scope: "scope_#{System.unique_integer([:positive])}",
+      queue: "queue_#{System.unique_integer([:positive])}",
       locked_at: locked_at,
       locked_by_node: Kernel.inspect(Node.self()),
       locked_until: locked_until
     }
+    |> struct!(attrs)
   end
 
-  def expired_lock_factory() do
-    lock = build(:lock)
+  def build(:expired_lock, attrs) do
+    lock = build(:lock, attrs)
 
     %{lock | locked_until: lock.locked_at}
   end
 
-  @spec job_factory() :: Job.t()
-  def job_factory() do
+  def build(:job, attrs) do
     %Job{
-      sequence: String.pad_leading(sequence("0"), 4, ["0"]),
-      scope: sequence("scope_"),
-      queue: sequence("queue_"),
-      performer: @job_performer |> to_string(),
-      action: sequence("action_"),
+      sequence: System.unique_integer([:positive]),
+      scope: "scope_#{System.unique_integer([:positive])}",
+      queue: "queue_#{System.unique_integer([:positive])}",
+      performer: @performer,
+      action: "action_#{System.unique_integer([:positive])}",
       params: %{"bin_pid" => pid_to_bin()},
-      scheduled_at: DateTime.utc_now() |> DateTime.truncate(:second),
+      scheduled_at: utc_now(),
       timeout: 5_000,
       max_backoff: 0,
       max_attempts: 20
     }
+    |> struct!(attrs)
   end
 
-  def done_job_factory() do
-    job = build(:job)
-    utc_now = DateTime.utc_now() |> DateTime.truncate(:second)
+  def build(:done_job, attrs) do
+    job = build(:job, attrs)
 
-    %{job | done_at: utc_now}
+    %{job | done_at: utc_now()}
   end
 
-  def raising_job_factory(attrs) do
-    job = build(:job)
+  def build(:raising_job, attrs) do
+    job = build(:job, attrs)
 
-    merge_attributes(job, Map.merge(attrs, %{action: "raise"}))
+    %{job | action: "raise"}
   end
 
-  def slow_job_factory(attrs) do
+  def build(:slow_job, attrs) do
+    attrs = Enum.into(attrs, %{})
     duration = attrs.params["duration"] || 500
 
     job = build(:job)
     params = job.params |> Map.put("duration", duration)
 
-    merge_attributes(job, Map.merge(attrs, %{action: "sleep", params: params}))
+    job |> Map.merge(attrs) |> Map.merge(%{action: "sleep", params: params})
   end
 
-  def success_job_factory(attrs) do
-    job = build(:job)
+  def build(:success_job, attrs) do
+    job = build(:job, attrs)
 
-    merge_attributes(job, Map.merge(attrs, %{action: "success"}))
+    %{job | action: "success"}
   end
 
-  def failure_job_factory(attrs) do
-    job = build(:job)
+  def build(:failure_job, attrs) do
+    job = build(:job, attrs)
 
-    merge_attributes(job, Map.merge(attrs, %{action: "fail"}))
+    %{job | action: "fail"}
   end
 
   def pid_to_bin(pid \\ self()) do
