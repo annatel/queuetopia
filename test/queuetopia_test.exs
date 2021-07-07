@@ -145,9 +145,12 @@ defmodule QueuetopiaTest do
   end
 
   test "paginate_jobs/1" do
-    %{id: id} = Factory.insert!(:job)
+    %{id: id_1} = Factory.insert!(:job, sequence: 1)
+    %{id: id_2} = Factory.insert!(:job, sequence: 2)
 
-    assert %{data: [%{id: ^id}], total: 1} = TestQueuetopia.paginate_jobs(100, 1)
+    assert %{data: [%{id: ^id_2}], total: 2} = TestQueuetopia.paginate_jobs(1, 1)
+    assert %{data: [%{id: ^id_1}], total: 2} = TestQueuetopia.paginate_jobs(1, 2)
+    assert %{data: [], total: 2} = TestQueuetopia.paginate_jobs(1, 3)
   end
 
   describe "handle_event/1" do

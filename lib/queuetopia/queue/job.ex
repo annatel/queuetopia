@@ -34,7 +34,7 @@ defmodule Queuetopia.Queue.Job do
     field(:done_at, :utc_datetime)
     field(:error, :string, null: true)
 
-    timestamps()
+    timestamps(type: :utc_datetime)
   end
 
   def default_timeout(), do: @default_timeout

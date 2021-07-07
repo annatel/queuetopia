@@ -10,9 +10,9 @@ defmodule Queuetopia.Queue do
 
   @lock_security_retention 1_000
 
-  @type list_options :: [list_option] | []
+  @type list_options :: [option] | []
 
-  @type list_option :: {:filters, keyword} | {:search_query, binary}
+  @type option :: {:filters, keyword} | {:search_query, binary}
 
   @doc """
   List jobs by options.
@@ -52,7 +52,6 @@ defmodule Queuetopia.Queue do
     |> JobQueryable.filter(filters)
     |> JobQueryable.search(search_query)
     |> JobQueryable.order_by(order_bys)
-    |> Ecto.Queryable.to_query()
   end
 
   @doc """
@@ -207,16 +206,17 @@ defmodule Queuetopia.Queue do
   end
 
   @doc false
-  @spec persist_result(module, Job.t(), {:error, any} | :ok | {:ok, any}) :: Job.t()
-  def persist_result(repo, %Job{} = job, {:error, error}) when is_binary(error),
-    do: persist_failure(repo, job, error)
+  @spec persist_result!(module, Job.t(), {:error, any} | :ok | {:ok, any}) :: Job.t()
+  def persist_result!(repo, %Job{} = job, {:error, error}) when is_binary(error),
+    do: persist_failure!(repo, job, error)
 
-  def persist_result(repo, %Job{} = job, {:ok, _res}), do: persist_success(repo, job)
-  def persist_result(repo, %Job{} = job, :ok), do: persist_success(repo, job)
+  def persist_result!(repo, %Job{} = job, {:ok, _res}), do: persist_success!(repo, job)
+  def persist_result!(repo, %Job{} = job, :ok), do: persist_success!(repo, job)
 
-  defp persist_failure(repo, %Job{} = job, error) do
+  defp persist_failure!(repo, %Job{} = job, error) do
     utc_now = DateTime.utc_now() |> DateTime.truncate(:second)
-    backoff = resolve_performer(job).backoff(job)
+    performer = resolve_performer(job)
+    backoff = performer.backoff(job)
 
     job
     |> Job.failed_job_changeset(%{
@@ -226,10 +226,11 @@ defmodule Queuetopia.Queue do
       next_attempt_at: utc_now |> DateTime.add(backoff, :millisecond),
       error: error
     })
-    |> repo.update()
+    |> repo.update!()
+    |> tap(&performer.handle_failed_job!/1)
   end
 
-  defp persist_success(repo, %Job{} = job) do
+  defp persist_success!(repo, %Job{} = job) do
     utc_now = DateTime.utc_now() |> DateTime.truncate(:second)
 
     job
@@ -239,7 +240,7 @@ defmodule Queuetopia.Queue do
       attempted_by: Atom.to_string(Node.self()),
       done_at: utc_now
     })
-    |> repo.update()
+    |> repo.update!()
   end
 
   defp resolve_performer(%Job{performer: performer}) do

@@ -49,3 +49,35 @@ defmodule Queuetopia.TestPerfomer do
     end
   end
 end
+
+defmodule Queuetopia.TestPerfomerWithBackoff do
+  use Queuetopia.Performer
+
+  alias Queuetopia.Queue.Job
+
+  @impl true
+
+  def perform(%Job{} = job) do
+    Queuetopia.TestPerfomer.perform(job)
+  end
+
+  @impl true
+  def backoff(%Job{}), do: 20 * 1_000
+end
+
+defmodule Queuetopia.TestPerfomerWithHandleFailedJob do
+  use Queuetopia.Performer
+
+  alias Queuetopia.Queue.Job
+
+  @impl true
+  def perform(%Job{} = job) do
+    Queuetopia.TestPerfomer.perform(job)
+  end
+
+  @impl true
+  def handle_failed_job!(%Job{} = job) do
+    send(self(), {:job, job})
+    :ok
+  end
+end
