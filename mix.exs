@@ -8,7 +8,7 @@ defmodule Queuetopia.MixProject do
     [
       app: :queuetopia,
       version: @version,
-      elixir: "~> 1.9",
+      elixir: "~> 1.12",
       start_permanent: Mix.env() == :prod,
       package: package(),
       description: description(),
