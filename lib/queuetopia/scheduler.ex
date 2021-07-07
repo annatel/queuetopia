@@ -90,7 +90,7 @@ defmodule Queuetopia.Scheduler do
 
   defp handle_task_result(repo, job, result) do
     unless is_nil(job) do
-      Queue.persist_result(repo, job, result)
+      Queue.persist_result!(repo, job, result)
     end
 
     :ok

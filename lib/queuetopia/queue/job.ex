@@ -34,7 +34,7 @@ defmodule Queuetopia.Queue.Job do
     field(:done_at, :utc_datetime)
     field(:error, :string, null: true)
 
-    timestamps()
+    timestamps(type: :utc_datetime)
   end
 
   def default_timeout(), do: @default_timeout
@@ -93,5 +93,34 @@ defmodule Queuetopia.Queue.Job do
   defp validate_required_attempt_attributes(changeset) do
     changeset
     |> validate_required([:attempts, :attempted_at, :attempted_by])
+  end
+
+  def email_subject(%__MODULE__{} = job) do
+    "[#{job.scope} #{job.queue} job failure]"
+  end
+
+  def email_html_body(%__MODULE__{} = job) do
+    """
+    ==============================<br/>
+    Hi,<br/>
+    <br/>
+    Here is a report about a failed job <br/>
+    <br/>
+    <b>Queue:</b> #{job.scope} #{job.queue}<br/>
+    <br/>
+    <br/>
+    <b>Action:</b> #{job.action}<br/>
+    <b>Params:</b>
+    <pre>
+    #{job.params |> Jason.encode!(pretty: true)}
+    </pre>
+    <br/>
+    <b>Attempts:</b> #{job.attempts}
+    <b>Next attempt at:</b> #{job.next_attempt_at}
+    <br/>
+    <b>Please, fix the failure in order to unlock the queue.</b>
+    <br/>
+    ==============================
+    """
   end
 end

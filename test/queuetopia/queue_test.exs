@@ -226,18 +226,18 @@ defmodule Queuetopia.QueueTest do
     assert Queue.perform(job) == :ok
   end
 
-  describe "persist_result/4" do
+  describe "persist_result!/4" do
     test "when a job succeeded, persists the job as succeeded" do
-      %Job{id: id} = job = Factory.insert!(:success_job)
+      job = Factory.insert!(:success_job)
 
-      _ = Queue.persist_result(TestRepo, job, :ok)
+      _ = Queue.persist_result!(TestRepo, job, :ok)
 
       %Job{
         done_at: done_at,
         attempted_at: attempted_at,
         attempted_by: attempted_by,
         attempts: attempts
-      } = TestRepo.get_by(Job, id: id)
+      } = TestRepo.reload(job)
 
       refute is_nil(done_at)
       refute is_nil(attempted_at)
@@ -247,16 +247,16 @@ defmodule Queuetopia.QueueTest do
     end
 
     test "when a job succeeded with a result, persists the job as succeeded" do
-      %Job{id: id} = job = Factory.insert!(:success_job)
+      job = Factory.insert!(:success_job)
 
-      _ = Queue.persist_result(TestRepo, job, {:ok, :done})
+      _ = Queue.persist_result!(TestRepo, job, {:ok, :done})
 
       %Job{
         done_at: done_at,
         attempted_at: attempted_at,
         attempted_by: attempted_by,
         attempts: attempts
-      } = TestRepo.get_by(Job, id: id)
+      } = TestRepo.reload(job)
 
       refute is_nil(done_at)
       refute is_nil(attempted_at)
@@ -266,36 +266,50 @@ defmodule Queuetopia.QueueTest do
     end
 
     test "when a job failed, persists the job as failed" do
-      %{id: id} = job = Factory.insert!(:failure_job)
+      job = Factory.insert!(:failure_job)
 
-      _ = Queue.persist_result(TestRepo, job, {:error, "error"})
+      _ = Queue.persist_result!(TestRepo, job, {:error, "error"})
 
-      %Job{
-        done_at: nil,
-        attempted_at: attempted_at,
-        attempted_by: attempted_by,
-        attempts: attempts
-      } = TestRepo.get_by(Job, id: id)
+      %Job{} = job = TestRepo.reload(job)
+      assert job.done_at == nil
+      refute job.attempted_at == nil
+      assert job.attempted_by == Atom.to_string(Node.self())
+      assert job.attempts == 1
+    end
 
-      refute is_nil(attempted_at)
-      assert attempted_by == Atom.to_string(Node.self())
-      assert attempts == 1
+    test "when handle_failed_job/1 is defined by the performer" do
+      %{id: id} =
+        job =
+        Factory.insert!(:failure_job,
+          performer: Queuetopia.TestPerfomerWithHandleFailedJob |> to_string
+        )
+
+      _ = Queue.persist_result!(TestRepo, job, {:error, "error"})
+
+      %Job{} = job = TestRepo.reload(job)
+      assert job.done_at == nil
+      refute job.attempted_at == nil
+      assert job.attempted_by == Atom.to_string(Node.self())
+      assert job.attempts == 1
+
+      assert_receive {:job, %Job{id: ^id, done_at: nil, attempted_at: %DateTime{}, attempts: 1}},
+                     100
     end
 
     test "by default, backoff is exponential for retry" do
-      %{id: id} = Factory.insert!(:failure_job, max_backoff: 10 * 60 * 1_000)
+      job = Factory.insert!(:failure_job, max_backoff: 10 * 60 * 1_000)
 
       [2_000, 3_000, 5_000, 9_000, 17_000]
       |> Enum.each(fn backoff ->
-        job = TestRepo.get_by(Job, id: id)
+        job = TestRepo.reload(job)
 
-        Queue.persist_result(TestRepo, job, {:error, "error"})
+        Queue.persist_result!(TestRepo, job, {:error, "error"})
 
         %Job{
           done_at: nil,
           attempted_at: attempted_at,
           next_attempt_at: next_attempt_at
-        } = TestRepo.get_by(Job, id: id)
+        } = TestRepo.reload(job)
 
         assert next_attempt_at == DateTime.add(attempted_at, backoff, :millisecond)
       end)
@@ -309,7 +323,7 @@ defmodule Queuetopia.QueueTest do
           attempted_at: Factory.utc_now() |> DateTime.truncate(:second)
         )
 
-      Queue.persist_result(TestRepo, job, {:error, "error"})
+      Queue.persist_result!(TestRepo, job, {:error, "error"})
 
       %{next_attempt_at: next_attempt_at} = job = TestRepo.reload(job)
 
@@ -329,25 +343,25 @@ defmodule Queuetopia.QueueTest do
     test "for default backoff, limit to maximum backoff" do
       max_backoff = 2_000
 
-      %{id: id} = job = Factory.insert!(:failure_job, max_backoff: max_backoff)
+      job = Factory.insert!(:failure_job, max_backoff: max_backoff)
 
-      _ = Queue.persist_result(TestRepo, job, {:error, "error"})
+      _ = Queue.persist_result!(TestRepo, job, {:error, "error"})
 
       %Job{
         done_at: nil,
         attempted_at: attempted_at,
         next_attempt_at: next_attempt_at
-      } = TestRepo.get_by(Job, id: id)
+      } = TestRepo.reload(job)
 
       assert next_attempt_at == DateTime.add(attempted_at, max_backoff, :millisecond)
 
-      _ = Queue.persist_result(TestRepo, job, {:error, "error"})
+      _ = Queue.persist_result!(TestRepo, job, {:error, "error"})
 
       %Job{
         done_at: nil,
         attempted_at: attempted_at,
         next_attempt_at: next_attempt_at
-      } = TestRepo.get_by(Job, id: id)
+      } = TestRepo.reload(job)
 
       assert next_attempt_at == DateTime.add(attempted_at, max_backoff, :millisecond)
     end

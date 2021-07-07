@@ -13,6 +13,6 @@ defmodule Queuetopia.Queue.JobQueryable do
   end
 
   defp filter_by_field(_queryable, {key, _value}) when key not in @filterable_fields do
-    raise "Filter not implemented"
+    raise ArgumentError, "Filter not implemented"
   end
 end
