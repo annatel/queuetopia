@@ -245,4 +245,37 @@ defmodule Queuetopia.Queue.JobTest do
       assert changeset.valid?
     end
   end
+
+  test "email_subject/1" do
+    job = Factory.insert!(:job)
+
+    assert Job.email_subject(job) == "[#{job.scope} #{job.queue} job failure]"
+  end
+
+  test "email_html_body/1" do
+    job = Factory.insert!(:job)
+
+    assert Job.email_html_body(job) == """
+           ==============================<br/>
+           Hi,<br/>
+           <br/>
+           Here is a report about a failed job <br/>
+           <br/>
+           <b>Queue:</b> #{job.scope} #{job.queue}<br/>
+           <br/>
+           <br/>
+           <b>Action:</b> #{job.action}<br/>
+           <b>Params:</b>
+           <pre>
+           #{job.params |> Jason.encode!(pretty: true)}
+           </pre>
+           <br/>
+           <b>Attempts:</b> #{job.attempts}
+           <b>Next attempt at:</b> #{job.next_attempt_at}
+           <br/>
+           <b>Please, fix the failure in order to unlock the queue.</b>
+           <br/>
+           ==============================
+           """
+  end
 end
