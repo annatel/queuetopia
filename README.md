@@ -40,7 +40,7 @@ The package can be installed by adding `queuetopia` to your list of dependencies
 ```elixir
 def deps do
   [
-    {:queuetopia, "~> 2.0.1"}
+    {:queuetopia, "~> 2.1.2"}
   ]
 end
 ```
