@@ -66,7 +66,7 @@ defmodule QueuetopiaTest do
                  opts
                )
 
-      assert job.sequence == 1
+      assert job.sequence >= 1
       assert job.scope == TestQueuetopia.scope()
       assert job.queue == jobs_params.queue
       assert job.performer == TestQueuetopia.performer()

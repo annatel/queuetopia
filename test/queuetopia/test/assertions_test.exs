@@ -68,6 +68,8 @@ defmodule Queuetopia.Test.AssertionsTest do
 
   describe "assert_job_created/2 for a specific job" do
     test "when the job has just been created" do
+      Factory.insert!(:job, scope: Queuetopia.TestQueuetopia.scope(), params: %{a: 1})
+
       %{id: job_id} =
         Factory.insert!(:job, scope: Queuetopia.TestQueuetopia.scope(), params: %{b: 1, c: 2})
 

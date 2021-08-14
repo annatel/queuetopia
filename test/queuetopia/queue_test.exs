@@ -182,7 +182,7 @@ defmodule Queuetopia.QueueTest do
                  opts
                )
 
-      assert job.sequence == 1
+      assert job.sequence >= 1
       assert job.scope == params.scope
       assert job.queue == params.queue
       assert job.performer == to_string(params.performer)

@@ -28,7 +28,7 @@ defmodule Queuetopia.Factory do
 
   def build(:job, attrs) do
     %Job{
-      sequence: System.unique_integer([:positive]),
+      sequence: Queuetopia.Sequences.next_value!(:queuetopia_sequences, Queuetopia.TestRepo),
       scope: "scope_#{System.unique_integer([:positive])}",
       queue: "queue_#{System.unique_integer([:positive])}",
       performer: @performer,
