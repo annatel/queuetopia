@@ -57,7 +57,7 @@ defmodule QueuetopiaTest do
         max_attempts: jobs_params.max_attempts
       ]
 
-      sequence =
+      %{rows: [[sequence]], num_rows: 1} =
         Ecto.Adapters.SQL.query!(Queuetopia.TestRepo, "SELECT sequence FROM queuetopia_sequences")
 
       assert {:ok, %Job{} = job} =
