@@ -114,7 +114,7 @@ defmodule Queuetopia.Test.Assertions do
   defp get_last_job(queuetopia) do
     repo = queuetopia.repo()
 
-    Job |> Ecto.Query.last() |> repo.one()
+    Job |> Ecto.Query.last(:sequence) |> repo.one()
   end
 
   defp get_last_job(queuetopia, queue) do
