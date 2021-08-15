@@ -2,12 +2,12 @@ defmodule Queuetopia.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/annatel/queuetopia"
-  @version "2.1.3"
+  @version "2.2.0"
 
   def project do
     [
       app: :queuetopia,
-      version: @version,
+      version: version(),
       elixir: "~> 1.12",
       start_permanent: Mix.env() == :prod,
       package: package(),
@@ -45,6 +45,7 @@ defmodule Queuetopia.MixProject do
 
   defp aliases do
     [
+      "app.version": &display_app_version/1,
       "ecto.reset": ["ecto.drop", "ecto.create", "ecto.migrate"],
       test: ["ecto.create --quiet", "ecto.migrate", "test"]
     ]
@@ -66,4 +67,7 @@ defmodule Queuetopia.MixProject do
       ]
     ]
   end
+
+  defp version(), do: @version
+  defp display_app_version(_), do: Mix.shell().info(version())
 end

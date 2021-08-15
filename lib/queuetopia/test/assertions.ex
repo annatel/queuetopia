@@ -1,6 +1,9 @@
 defmodule Queuetopia.Test.Assertions do
   import ExUnit.Assertions
+
   require Ecto.Query
+
+  alias Queuetopia.Queue
   alias Queuetopia.Queue.Job
 
   @doc """
@@ -12,120 +15,76 @@ defmodule Queuetopia.Test.Assertions do
         job = MyQueuetopia.create_job("mailer_queue", "deliver_mail", %{body: "hello", from: "from", to: "to"})
 
         assert_job_created(MyQueuetopia)
-        assert_job_created(MyQueuetopia, "mailer_queue")
-        assert_job_created(MyQueuetopia, "mailer_queue", %{params: %{body: "hello"}})
-        assert_job_created(MyQueuetopia, "mailer_queue", %{action: "deliver_email", params: %{body: "hello"}})
+        assert_job_created(MyQueuetopia, 1)
+        assert_job_created(MyQueuetopia, %{queue: "mailer_queue", params: %{body: "hello"}})
+        assert_job_created(MyQueuetopia, 2, %{action: "deliver_email", params: %{body: "hello"}})
 
   """
+  def assert_job_created(queuetopia, job_attrs \\ %{})
 
-  def assert_job_created(queuetopia) when is_atom(queuetopia) do
-    job = get_last_job(queuetopia)
-    refute is_nil(job), expected_job_message(%{scope: queuetopia |> to_string}, job)
+  def assert_job_created(queuetopia, %{} = job_attrs),
+    do: assert_job_created(queuetopia, 1, job_attrs)
+
+  def assert_job_created(queuetopia, expected_count) when is_integer(expected_count),
+    do: assert_job_created(queuetopia, expected_count, %{})
+
+  def assert_job_created(queuetopia, expected_count, %{} = job_attrs)
+      when is_integer(expected_count) do
+    job_attrs = job_attrs |> Map.put(:scope, to_string(queuetopia)) |> mapify()
+
+    job_params = Map.get(job_attrs, :params, %{})
+
+    jobs =
+      Queue.list_jobs(queuetopia.repo(),
+        filters: job_attrs |> Map.take(filterable_fields()) |> Enum.to_list()
+      )
+      |> Enum.filter(fn job -> subset?(job_params, job.params) end)
+      |> mapify()
+
+    count = jobs |> length()
+
+    assert count == expected_count, message("job", job_attrs, expected_count, count)
   end
 
-  def assert_job_created(queuetopia, queue) when is_atom(queuetopia) and is_binary(queue) do
-    job = get_last_job(queuetopia, queue)
-    refute is_nil(job), expected_job_message(%{scope: queuetopia |> to_string, queue: queue}, job)
-  end
-
-  def assert_job_created(queuetopia, %{} = job_params) when is_atom(queuetopia) do
-    last_job = get_last_job(queuetopia)
-    refute is_nil(last_job), expected_job_message(job_params, last_job)
-
-    attrs = mapify(job_params)
-
-    assert_job_attrs_match(last_job, attrs)
-  end
-
-  def assert_job_created(queuetopia, queue, %{} = job_params)
-      when is_atom(queuetopia) and is_binary(queue) do
-    last_job = get_last_job(queuetopia, queue)
-    refute is_nil(last_job), expected_job_message(job_params, last_job)
-
-    attrs = mapify(job_params)
-
-    assert_job_attrs_match(last_job, attrs)
-  end
-
-  defp assert_job_attrs_match(last_job, %{params: %{} = params} = attrs) do
-    last_job_attrs = last_job |> Map.from_struct()
-
-    assert subset?(params, last_job_attrs.params) and
-             subset?(attrs |> Map.delete(:params), last_job_attrs),
-           expected_job_message(attrs, last_job)
-  end
-
-  defp assert_job_attrs_match(last_job, %{} = attrs) do
-    last_job_attrs = last_job |> Map.from_struct()
-
-    assert subset?(attrs, last_job_attrs), expected_job_message(attrs, last_job)
-  end
+  defp filterable_fields(), do: [:id, :scope, :queue, :action]
 
   defp subset?(a, b) do
     MapSet.subset?(a |> MapSet.new(), b |> MapSet.new())
   end
 
-  defp expected_job_message(expected_job_attrs, found_job) do
-    """
-    Expected a job matching:
-
-    #{inspect(expected_job_attrs, pretty: true)}
-
-    Found job: #{inspect(found_job, pretty: true)}
-    """
-  end
-
   @doc """
   Refute that a job has been created.
+
+  It can be used as below:
+
+    # Examples
+        job = MyQueuetopia.create_job("mailer_queue", "deliver_mail", %{body: "hello", from: "from", to: "to"})
+
+        refute_job_created(MyQueuetopia)
+        refute_job_created(MyQueuetopia, %{queue: "mailer_queue", params: %{body: "hello"}})
+
   """
-  def refute_job_created(queuetopia) do
-    job = get_last_job(queuetopia)
-    assert is_nil(job), no_expected_job_message(%{scope: queuetopia |> to_string}, job)
+  def refute_job_created(queuetopia, %{} = job_attrs \\ %{}) do
+    assert_job_created(queuetopia, 0, job_attrs)
   end
 
-  def refute_job_created(queuetopia, queue) when is_atom(queuetopia) and is_binary(queue) do
-    job = get_last_job(queuetopia, queue)
-
-    assert is_nil(job),
-           no_expected_job_message(%{scope: queuetopia |> to_string, queue: queue}, job)
-  end
-
-  def refute_job_created(queuetopia, %{} = job_params) when is_atom(queuetopia) do
-    last_job = get_last_job(queuetopia)
-    assert is_nil(last_job), no_expected_job_message(job_params, last_job)
-  end
-
-  def refute_job_created(queuetopia, queue, %{} = job_params)
-      when is_atom(queuetopia) and is_binary(queue) do
-    last_job = get_last_job(queuetopia, queue)
-    assert is_nil(last_job), no_expected_job_message(job_params, last_job)
-  end
-
-  defp no_expected_job_message(expected_job_attrs, found_job) do
-    """
-    Expected no job matching:
-
-    #{inspect(expected_job_attrs, pretty: true)}
-
-    Found job: #{inspect(found_job, pretty: true)}
-    """
-  end
-
-  defp get_last_job(queuetopia) do
-    repo = queuetopia.repo()
-
-    Job |> Ecto.Query.last(:sequence) |> repo.one()
-  end
-
-  defp get_last_job(queuetopia, queue) do
-    repo = queuetopia.repo()
-
-    Job
-    |> Ecto.Query.where([job], job.queue == ^queue)
-    |> Ecto.Query.last()
-    |> repo.one()
-  end
-
+  defp mapify(jobs) when is_list(jobs), do: Enum.map(jobs, &mapify/1)
   defp mapify(%Job{} = job), do: job |> Map.from_struct() |> Map.delete(:__meta__)
   defp mapify(%{} = job), do: job
+
+  defp message(
+         resource_name,
+         %{} = expected_job_attrs,
+         expected_count,
+         found_count
+       ) do
+    if Enum.empty?(expected_job_attrs |> Map.drop([:scope])),
+      do:
+        "Expected #{expected_count} #{maybe_pluralized_item(resource_name, expected_count)}, got #{found_count}",
+      else:
+        "Expected #{expected_count} #{maybe_pluralized_item(resource_name, expected_count)} with attributes #{inspect(expected_job_attrs, pretty: true)}, got #{found_count}."
+  end
+
+  defp maybe_pluralized_item(resource_name, count) when count > 1, do: resource_name <> "s"
+  defp maybe_pluralized_item(resource_name, _), do: resource_name
 end
