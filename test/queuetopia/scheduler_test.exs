@@ -335,12 +335,13 @@ defmodule Queuetopia.SchedulerTest do
                attempted_at: attempted_at,
                attempted_by: attempted_by,
                attempts: attempts,
-               error: "down"
+               error: error
              } = Queue.get_next_pending_job(TestRepo, scope, queue)
 
       assert attempts > 0
       refute is_nil(attempted_at)
       assert attempted_by == Atom.to_string(Node.self())
+      assert error =~ "%RuntimeError{message: \"down\"}"
 
       :sys.get_state(TestQueuetopia.Scheduler)
     end

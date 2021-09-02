@@ -55,11 +55,11 @@ defmodule Queuetopia.Scheduler do
   end
 
   def handle_info(
-        {:DOWN, ref, :process, _pid, _reason},
+        {:DOWN, ref, :process, _pid, reason},
         %{jobs: jobs, repo: repo, scope: scope} = state
       ) do
     job = Map.get(jobs, ref)
-    :ok = handle_task_result(repo, job, {:error, "down"})
+    :ok = handle_task_result(repo, job, {:error, inspect(reason)})
 
     Queue.unlock_queue(repo, scope, job.queue)
     {:noreply, %{state | jobs: Map.delete(jobs, ref)}}
