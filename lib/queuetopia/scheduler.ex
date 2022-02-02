@@ -119,7 +119,7 @@ defmodule Queuetopia.Scheduler do
          repo,
          scope
        ) do
-    with %Job{} <- job = Queue.get_next_pending_job(repo, scope, queue),
+    with %Job{} = job <- Queue.get_next_pending_job(repo, scope, queue),
          {:ok, job} <- Queue.fetch_job(repo, job) do
       task = Task.Supervisor.async_nolink(task_supervisor_name, Queue, :perform, [job])
 
