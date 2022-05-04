@@ -32,7 +32,7 @@ defmodule Queuetopia.Queue.Job do
     field(:attempted_by, :string)
     field(:next_attempt_at, :utc_datetime)
     field(:done_at, :utc_datetime)
-    field(:error, :string, null: true)
+    field(:error, :string)
 
     timestamps(type: :utc_datetime)
   end
