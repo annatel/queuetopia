@@ -24,7 +24,4 @@ queuetopia-*.tar
 
 .elixir_ls
 .tool-versions
-!env/example.env
-!env/ci.env
-env/*.env
-todo
+.env
