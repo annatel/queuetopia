@@ -26,17 +26,26 @@ lint:
 test:
     FROM earthly/dind:alpine
     WORKDIR /test
-    RUN apk add --no-progress --update mysql-client
+    RUN apk add --no-progress --update mysql-client postgresql-client
     
     COPY --dir config lib priv test .
     
+    ARG PG_IMG="postgres:11.11"
     ARG MYSQL_IMG="mysql:5.7"
 
-    WITH DOCKER --pull "$MYSQL_IMG" --load elixir:latest=+deps --build-arg MIX_ENV="test"
+    WITH DOCKER --pull "$PG_IMG" --pull "$MYSQL_IMG" --load elixir:latest=+deps --build-arg MIX_ENV="test"
         RUN set -e; \
             timeout=$(expr $(date +%s) + 60); \
 
+        docker run --name pg --network=host -d -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=queuetopia "$PG_IMG"; \
         docker run --name mysql --network=host -d -e MYSQL_ROOT_PASSWORD=root "$MYSQL_IMG"; \
+
+        # wait for postgres to start
+        while ! pg_isready --host=127.0.0.1 --port=5432 --quiet; do \
+            test "$(date +%s)" -le "$timeout" || (echo "timed out waiting for postgres"; exit 1); \
+            echo "waiting for postgres"; \
+            sleep 1; \
+        done; \
 
         # wait for mysql to start
         while ! mysqladmin ping --host=127.0.0.1 --port=3306 --protocol=TCP --silent; do \
@@ -53,6 +62,21 @@ test:
             -e EX_LOG_LEVEL=warn \
             -e QUEUETOPIA__DATABASE_TEST_URL="ecto://root:root@localhost:3306/queuetopia" \
             -e QUEUETOPIA__DATABASE_TEST_REPO_ADAPTER=myxql \
+            --network host \
+            -v "$PWD/config:/app/config" \
+            -v "$PWD/lib:/app/lib" \
+            -v "$PWD/priv:/app/priv" \
+            -v "$PWD/test:/app/test" \
+            -w /app \
+            --name queuetopia \
+            elixir:latest mix test; \
+
+        docker run \
+            --rm \
+            -e MIX_ENV=test \
+            -e EX_LOG_LEVEL=warn \
+            -e QUEUETOPIA__DATABASE_TEST_URL="ecto://postgres:postgres@localhost:5432/queuetopia" \
+            -e QUEUETOPIA__DATABASE_TEST_REPO_ADAPTER=postgres \
             --network host \
             -v "$PWD/config:/app/config" \
             -v "$PWD/lib:/app/lib" \
