@@ -4,6 +4,7 @@ defmodule Queuetopia.TestRepo do
     "myxql" => Ecto.Adapters.MyXQL,
     "postgres" => Ecto.Adapters.Postgres
   }
+
   use Ecto.Repo,
     otp_app: :queuetopia,
     adapter: @test_repo_adapter_options[@test_repo_adapter]

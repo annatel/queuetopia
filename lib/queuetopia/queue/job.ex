@@ -96,29 +96,27 @@ defmodule Queuetopia.Queue.Job do
   end
 
   def email_subject(%__MODULE__{} = job) do
-    "[#{job.scope} #{job.queue} job failure]"
+    "[#{job.scope} - Failed job (#{job.id})]"
   end
 
   def email_html_body(%__MODULE__{} = job) do
     """
     ==============================<br/>
+    <br/>
     Hi,<br/>
     <br/>
-    Here is a report about a failed job <br/>
+    Here is a report about a job failure.<br/>
     <br/>
-    <b>Queue:</b> #{job.scope} #{job.queue}<br/>
+    Id: #{job.id}<br/>
+    Scope: #{job.scope}<br/>
+    Queue: #{job.queue}<br/>
+    Action: #{job.action}<br/>
+    Job parameters: #{inspect(job.params)}<br/>
+    Number of attempts: #{job.attempts}<br/>
+    Next attempt at: #{job.next_attempt_at}<br/>
+    Error: #{job.error}<br/>
     <br/>
-    <br/>
-    <b>Action:</b> #{job.action}<br/>
-    <b>Params:</b>
-    <pre>
-    #{job.params |> Jason.encode!(pretty: true)}
-    </pre>
-    <br/>
-    <b>Attempts:</b> #{job.attempts}
-    <b>Next attempt at:</b> #{job.next_attempt_at}
-    <br/>
-    <b>Please, fix the failure in order to unlock the queue.</b>
+    Please, fix the failure in order to unlock the flow of the jobs.<br/>
     <br/>
     ==============================
     """
