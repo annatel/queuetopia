@@ -249,17 +249,12 @@ defmodule Queuetopia.Queue.JobTest do
   test "email_subject/1" do
     job = Factory.insert!(:job)
 
-<<<<<<< HEAD
     assert Job.email_subject(job) == "[#{job.scope} - Failed job (#{job.id})]"
-=======
-    assert Job.email_subject(job) == "[#{job.scope} #{job.queue} - Failed job]"
->>>>>>> 098ed7e950b5f792f39abdde921242e1b54ea712
   end
 
   test "email_html_body/1" do
     job = Factory.insert!(:job)
 
-<<<<<<< HEAD
     assert Job.email_html_body(job) ==
              """
              ==============================<br/>
@@ -281,27 +276,5 @@ defmodule Queuetopia.Queue.JobTest do
              <br/>
              ==============================
              """
-=======
-    assert Job.email_html_body(job) == """
-           ==============================<br/>
-           <br/>
-           Hi,<br/>
-           <br/>
-           Here is a report about a job failure.<br/>
-           <br/>
-           Id: #{job.id}<br/>
-           Scope: #{job.scope}<br/>
-           Queue: #{job.queue}<br/>
-           Action: #{job.action}<br/>
-           Job parameters: #{inspect(job.params)}<br/>
-           Number of attempts: #{job.attempts}<br/>
-           Next attempt at: #{job.next_attempt_at}<br/>
-           Error: #{job.error}<br/>
-           <br/>
-           Please, fix the failure in order to unlock the flow of the jobs.<br/>
-           <br/>
-           ==============================
-           """
->>>>>>> 098ed7e950b5f792f39abdde921242e1b54ea712
   end
 end
