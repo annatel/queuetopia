@@ -40,12 +40,12 @@ The package can be installed by adding `queuetopia` to your list of dependencies
 ```elixir
 def deps do
   [
-    {:queuetopia, "~> 2.2.0"}
+    {:queuetopia, "~> 2.3.5"}
   ]
 end
 ```
 
-After the packages are installed you must create a database migration to
+After the packages are installed, you must create a database migration to
 add the queuetopia tables to your database:
 
 ```bash
@@ -75,6 +75,7 @@ Now, run the migration to create the table:
 mix ecto.migrate
 ```
 
+Each migration can be called separately.
 ## Usage
 
 ### Defining the Queuetopia
@@ -87,12 +88,13 @@ Define a Queuetopia with a repo and a perfomer like this:
 ```elixir
 defmodule MyApp.MailQueuetopia do
   use Queuetopia,
-    repo: MyApp.Repo,
-    performer: MyApp.MailQueuetopia.Performer
+    otp_app: :my_app,
+    performer: MyApp.MailQueuetopia.Performer,
+    repo: MyApp.Repo
 end
 ```
-
-Define the perfomer, adopting the Queuetopia.Performer behaviour, like this:
+A Queuetopia expects a performer to exist.
+For example, the performer can be implemented like this:
 
 ```elixir
 defmodule MyApp.MailQueuetopia.Performer do
@@ -144,21 +146,23 @@ The configuration can be set as below:
 
 Note that the polling interval is optionnal and is an available param of start_link/1.
 By default, it will be set to 60 seconds.
-
+`disable?` is usefull to prevent the scheduler to start. 
+In test environnement, it is recommanded to set it to true. It will be sufficient to test the job creation 
+and the performer.
 
 ### Feeds your queues
 
-To create a job defines its action and its params and configure its timeout and the max backoff for the retries.
-By default, the job timeout is set to 60 seconds, the max backoff to 24 hours and the max attempts to 20.
+To create a job defines its action and its params and configure its timeout.
+By default, the job timeout is set to 60 seconds, the max backoff to 24 hours.
 
 
 ```elixir
-MyApp.MailQueuetopia.create_job!("mails_queue_1", "send_mail", %{email_address: "toto@mail.com", body: "Welcome"}, [timeout: 1_000, max_backoff: 60_000])
+MyApp.MailQueuetopia.create_job!("mails_queue_1", "send_mail", %{email_address: "toto@mail.com", body: "Welcome"}, [timeout: 1_000])
 ```
 or
 
 ```elixir
-MyApp.MailQueuetopia.create_job("mails_queue_1", "send_mail", %{email_address: "toto@mail.com", body: "Welcome"}, [timeout: 1_000, max_backoff: 60_000])
+MyApp.MailQueuetopia.create_job("mails_queue_1", "send_mail", %{email_address: "toto@mail.com", body: "Welcome"}, [timeout: 1_000])
 ```
 to handle changeset errors.
 

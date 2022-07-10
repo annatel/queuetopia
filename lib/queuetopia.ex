@@ -1,4 +1,9 @@
 defmodule Queuetopia do
+  @moduledoc "README.md"
+             |> File.read!()
+             |> String.split("<!-- MDOC !-->")
+             |> Enum.fetch!(1)
+
   @moduledoc """
   Defines a queues machine.
 
