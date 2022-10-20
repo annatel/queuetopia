@@ -4,7 +4,7 @@ defmodule Queuetopia do
              |> String.split("<!-- MDOC !-->")
              |> List.first()
 
-  @moduledoc """
+  @doc """
   Defines a queues machine.
 
   A Queuetopia can manage multiple ordered blocking queues.
