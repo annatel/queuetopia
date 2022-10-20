@@ -134,22 +134,29 @@ defmodule Queuetopia.Queue do
   @doc """
   List the available pending queues by scope a.k.a by Queuetopia.
   """
-  @spec list_available_pending_queues(module, binary) :: [binary]
-  def list_available_pending_queues(repo, scope) do
+  @spec list_available_pending_queues(module, binary, keyword()) :: [binary]
+  def list_available_pending_queues(repo, scope, opts \\ []) do
     subset =
       Lock
       |> select([:queue])
       |> where([l], l.scope == ^scope)
 
-    Job
-    |> where([j], is_nil(j.done_at))
-    |> where([j], j.scope == ^scope)
-    |> where([j], j.queue not in subquery(subset))
-    |> select([:queue])
-    |> distinct(true)
-    |> repo.all()
-    |> Enum.map(& &1.queue)
+    limit = Keyword.get(opts, :limit)
+
+    query =
+      Job
+      |> where([j], is_nil(j.done_at))
+      |> where([j], j.scope == ^scope)
+      |> where([j], j.queue not in subquery(subset))
+      |> select([:queue])
+      |> distinct(true)
+      |> then(&query_limit(&1, limit))
+
+    repo.all(query) |> Enum.map(& &1.queue)
   end
+
+  defp query_limit(query, limit) when is_integer(limit), do: query |> limit(^limit)
+  defp query_limit(query, nil), do: query
 
   @doc """
   Get the next available pending job of a given queue by scope a.k.a by Queuetopia.

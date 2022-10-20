@@ -34,7 +34,8 @@ defmodule Queuetopia.Scheduler do
       task_supervisor_name: Keyword.get(opts, :task_supervisor_name),
       poll_interval: Keyword.get(opts, :poll_interval),
       scope: Keyword.get(opts, :scope),
-      jobs: %{}
+      jobs: %{},
+      number_of_concurrent_jobs: Keyword.get(opts, :number_of_concurrent_jobs)
     }
 
     {:ok, state}
@@ -47,10 +48,21 @@ defmodule Queuetopia.Scheduler do
       poll_interval: poll_interval,
       repo: repo,
       scope: scope,
-      jobs: jobs
+      jobs: jobs,
+      number_of_concurrent_jobs: number_of_concurrent_jobs
     } = state
 
-    jobs = poll_queues(task_supervisor_name, poll_interval, repo, scope, jobs, one_time?)
+    jobs =
+      poll_queues(
+        task_supervisor_name,
+        poll_interval,
+        repo,
+        scope,
+        jobs,
+        one_time?: one_time?,
+        number_of_concurrent_jobs: number_of_concurrent_jobs
+      )
+
     {:noreply, %{state | jobs: jobs}}
   end
 
@@ -96,11 +108,14 @@ defmodule Queuetopia.Scheduler do
     :ok
   end
 
-  defp poll_queues(task_supervisor_name, poll_interval, repo, scope, jobs, one_time?) do
+  defp poll_queues(task_supervisor_name, poll_interval, repo, scope, jobs, opts) do
+    one_time? = Keyword.get(opts, :one_time?)
+    number_of_concurrent_jobs = Keyword.get(opts, :number_of_concurrent_jobs)
+
     Queue.release_expired_locks(repo, scope)
 
     jobs =
-      Queue.list_available_pending_queues(repo, scope)
+      Queue.list_available_pending_queues(repo, scope, limit: number_of_concurrent_jobs)
       |> Enum.map(&perform_next_pending_job(&1, task_supervisor_name, repo, scope))
       |> Enum.reject(&is_nil(&1))
       |> Enum.into(%{})

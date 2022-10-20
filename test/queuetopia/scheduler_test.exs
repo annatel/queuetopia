@@ -27,6 +27,25 @@ defmodule Queuetopia.SchedulerTest do
     assert_receive {^queue, _, :ok}, 150
   end
 
+  test "poll number_of_concurrent_jobs" do
+    scope = TestQueuetopia.scope()
+
+    %{id: job_id_1} = Factory.insert!(:slow_job, params: %{"duration" => 100}, scope: scope)
+    %{id: job_id_2} = Factory.insert!(:slow_job, params: %{"duration" => 100}, scope: scope)
+
+    Application.put_env(:queuetopia, TestQueuetopia,
+      poll_interval: 50,
+      number_of_concurrent_jobs: 2
+    )
+
+    start_supervised!(TestQueuetopia)
+
+    assert_receive {_, ^job_id_1, :started}, 50
+    assert_receive {_, ^job_id_2, :started}, 50
+
+    :sys.get_state(TestQueuetopia.Scheduler)
+  end
+
   test "poll only queues of its scope" do
     _scope = TestQueuetopia.scope()
 

@@ -16,6 +16,13 @@ defmodule Queuetopia.QueueTest do
       assert [^queue_2] = Queue.list_available_pending_queues(TestRepo, scope_2)
     end
 
+    test "when limit is given, returns only the specified number of rows from the result set" do
+      %{queue: queue, scope: scope} = Factory.insert!(:job)
+      Factory.insert!(:job, queue: queue, scope: scope)
+
+      assert [_] = Queue.list_available_pending_queues(TestRepo, scope, limit: 1)
+    end
+
     test "when a queue is locked" do
       %{queue: queue_1, scope: scope_1} = Factory.insert!(:job)
       _ = Factory.insert!(:lock, queue: queue_1, scope: scope_1)
@@ -23,7 +30,7 @@ defmodule Queuetopia.QueueTest do
       assert [] = Queue.list_available_pending_queues(TestRepo, scope_1)
     end
 
-    test "collision between two queues with the same name but in different scope" do
+    test "there is no collision between two queues with the same name but in different scope" do
       %{queue: queue, scope: scope_1} = Factory.insert!(:job)
       %{scope: scope_2} = Factory.insert!(:job, queue: queue)
 
