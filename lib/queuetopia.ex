@@ -1,5 +1,5 @@
 defmodule Queuetopia do
-  @moduledoc "../README.md"
+  @moduledoc "./README.md"
              |> File.read!()
              |> String.split("<!-- MDOC !-->")
              |> List.first()
