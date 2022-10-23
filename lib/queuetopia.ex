@@ -1,6 +1,7 @@
 defmodule Queuetopia do
   @moduledoc "./README.md"
              |> File.read!()
+             |> IO.inspect()
              |> String.split("<!-- MDOC !-->")
              |> List.first()
 
