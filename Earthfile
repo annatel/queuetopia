@@ -17,7 +17,7 @@ deps:
 
 lint:
     FROM --build-arg MIX_ENV="dev" +deps
-    COPY --dir lib .
+    COPY --dir lib README.md .
     COPY .formatter.exs .
     RUN mix deps.unlock --check-unused
     RUN mix format --check-formatted
@@ -29,6 +29,7 @@ test:
     RUN apk add --no-progress --update mysql-client postgresql-client
     
     COPY --dir config lib priv test .
+    COPY README.md .
     
     ARG PG_IMG="postgres:11.11"
     ARG MYSQL_IMG="mysql:5.7"
@@ -67,21 +68,7 @@ test:
             -v "$PWD/lib:/app/lib" \
             -v "$PWD/priv:/app/priv" \
             -v "$PWD/test:/app/test" \
-            -w /app \
-            --name queuetopia \
-            elixir:latest mix test; \
-
-        docker run \
-            --rm \
-            -e MIX_ENV=test \
-            -e EX_LOG_LEVEL=warn \
-            -e QUEUETOPIA__DATABASE_TEST_URL="ecto://postgres:postgres@localhost:5432/queuetopia" \
-            -e QUEUETOPIA__DATABASE_TEST_REPO_ADAPTER=postgres \
-            --network host \
-            -v "$PWD/config:/app/config" \
-            -v "$PWD/lib:/app/lib" \
-            -v "$PWD/priv:/app/priv" \
-            -v "$PWD/test:/app/test" \
+            -v "$PWD/README.md:/app/README.md" \
             -w /app \
             --name queuetopia \
             elixir:latest mix test;
