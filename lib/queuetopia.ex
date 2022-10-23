@@ -2,9 +2,9 @@ defmodule Queuetopia do
   @moduledoc "README.md"
              |> File.read!()
              |> String.split("<!-- MDOC !-->")
-             |> Enum.fetch!(1)
+             |> List.first()
 
-  @moduledoc """
+  @doc """
   Defines a queues machine.
 
   A Queuetopia can manage multiple ordered blocking queues.
@@ -77,7 +77,8 @@ defmodule Queuetopia do
 
         opts = [
           repo: @repo,
-          poll_interval: poll_interval
+          poll_interval: poll_interval,
+          number_of_concurrent_jobs: Keyword.get(config, :number_of_concurrent_jobs)
         ]
 
         if disable?, do: :ignore, else: Supervisor.start_link(__MODULE__, opts, name: __MODULE__)
@@ -93,7 +94,8 @@ defmodule Queuetopia do
              task_supervisor_name: task_supervisor(),
              repo: Keyword.fetch!(args, :repo),
              scope: @scope,
-             poll_interval: Keyword.fetch!(args, :poll_interval)
+             poll_interval: Keyword.fetch!(args, :poll_interval),
+             number_of_concurrent_jobs: Keyword.fetch!(args, :number_of_concurrent_jobs)
            ]}
         ]
 
