@@ -272,7 +272,7 @@ defmodule Queuetopia.QueueTest do
       assert done_at == attempted_at
     end
 
-    test "when a job failed, persists the job as failed" do
+    test "when a job failed, persists the job as failed and record the error" do
       job = Factory.insert!(:failure_job)
 
       _ = Queue.persist_result!(TestRepo, job, {:error, "error"})
@@ -282,6 +282,20 @@ defmodule Queuetopia.QueueTest do
       refute job.attempted_at == nil
       assert job.attempted_by == Atom.to_string(Node.self())
       assert job.attempts == 1
+      assert job.error == "error"
+    end
+
+    test "when a job returns an unexpected_response, persists the job as failed and record the response" do
+      job = Factory.insert!(:failure_job)
+
+      _ = Queue.persist_result!(TestRepo, job, "unexpected_response")
+
+      %Job{} = job = TestRepo.reload(job)
+      assert job.done_at == nil
+      refute job.attempted_at == nil
+      assert job.attempted_by == Atom.to_string(Node.self())
+      assert job.attempts == 1
+      assert job.error == "\"unexpected_response\""
     end
 
     test "when handle_failed_job/1 is defined by the performer" do

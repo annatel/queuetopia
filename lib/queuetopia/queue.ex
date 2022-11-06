@@ -214,11 +214,15 @@ defmodule Queuetopia.Queue do
 
   @doc false
   @spec persist_result!(module, Job.t(), {:error, any} | :ok | {:ok, any}) :: Job.t()
-  def persist_result!(repo, %Job{} = job, {:error, error}) when is_binary(error),
-    do: persist_failure!(repo, job, error)
 
   def persist_result!(repo, %Job{} = job, {:ok, _res}), do: persist_success!(repo, job)
   def persist_result!(repo, %Job{} = job, :ok), do: persist_success!(repo, job)
+
+  def persist_result!(repo, %Job{} = job, {:error, error}) when is_binary(error),
+    do: persist_failure!(repo, job, error)
+
+  def persist_result!(repo, %Job{} = job, unexpected_response),
+    do: persist_failure!(repo, job, inspect(unexpected_response))
 
   defp persist_failure!(repo, %Job{} = job, error) do
     utc_now = DateTime.utc_now() |> DateTime.truncate(:second)
