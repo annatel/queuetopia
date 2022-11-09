@@ -3,6 +3,23 @@ defmodule Queuetopia.Test.AssertionsTest do
 
   import Queuetopia.Test.Assertions
 
+  describe "jobs_created/1" do
+    test "when the job is found" do
+      Factory.insert!(:job, scope: Queuetopia.TestQueuetopia.scope())
+      assert [_] = jobs_created(Queuetopia.TestQueuetopia)
+    end
+
+    test "multiple jobs" do
+      Factory.insert!(:job, scope: Queuetopia.TestQueuetopia.scope())
+      Factory.insert!(:job, scope: Queuetopia.TestQueuetopia.scope())
+      assert [_, _] = jobs_created(Queuetopia.TestQueuetopia)
+    end
+
+    test "when no job is not found" do
+      assert [] = jobs_created(Queuetopia.TestQueuetopia)
+    end
+  end
+
   describe "assert_job_created/1" do
     test "when the job is found" do
       Factory.insert!(:job, scope: Queuetopia.TestQueuetopia.scope())
