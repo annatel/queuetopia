@@ -15,7 +15,7 @@ defmodule Queuetopia.Test.AssertionsTest do
       assert [_, _] = jobs_created(Queuetopia.TestQueuetopia)
     end
 
-    test "when no job is not found" do
+    test "when no job is found" do
       assert [] = jobs_created(Queuetopia.TestQueuetopia)
     end
   end
