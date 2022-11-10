@@ -7,6 +7,31 @@ defmodule Queuetopia.Test.Assertions do
   alias Queuetopia.Queue.Job
 
   @doc """
+  Find jobs that have just been created
+
+  It can be used as below:
+
+    # Examples
+        MyQueuetopia.create_job("mailer_queue", "deliver_mail", %{body: "hello", from: "from", to: "to"})
+
+        assert [job] = jobs_created(MyQueuetopia)
+  """
+  def jobs_created(queuetopia, %{} = job_attrs \\ %{}) do
+    job_attrs = full_job_attrs(queuetopia, job_attrs)
+
+    job_params = Map.get(job_attrs, :params, %{})
+
+    Queue.list_jobs(queuetopia.repo(),
+      filters: job_attrs |> Map.take(filterable_fields()) |> Enum.to_list()
+    )
+    |> Enum.filter(fn job -> subset?(job_params, job.params) end)
+    |> mapify()
+  end
+
+  defp full_job_attrs(queuetopia, job_attrs),
+    do: job_attrs |> Map.put(:scope, to_string(queuetopia)) |> mapify()
+
+  @doc """
   Asserts the job has juste been created
 
   It can be used as below:
@@ -30,20 +55,10 @@ defmodule Queuetopia.Test.Assertions do
 
   def assert_job_created(queuetopia, expected_count, %{} = job_attrs)
       when is_integer(expected_count) do
-    job_attrs = job_attrs |> Map.put(:scope, to_string(queuetopia)) |> mapify()
+    count = jobs_created(queuetopia, job_attrs) |> length()
 
-    job_params = Map.get(job_attrs, :params, %{})
-
-    jobs =
-      Queue.list_jobs(queuetopia.repo(),
-        filters: job_attrs |> Map.take(filterable_fields()) |> Enum.to_list()
-      )
-      |> Enum.filter(fn job -> subset?(job_params, job.params) end)
-      |> mapify()
-
-    count = jobs |> length()
-
-    assert count == expected_count, message("job", job_attrs, expected_count, count)
+    assert count == expected_count,
+           message("job", full_job_attrs(queuetopia, job_attrs), expected_count, count)
   end
 
   defp filterable_fields(), do: [:id, :scope, :queue, :action]
