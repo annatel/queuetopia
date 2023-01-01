@@ -151,6 +151,7 @@ defmodule Queuetopia.Queue do
       |> select([:queue])
       |> distinct(true)
       |> then(&query_limit(&1, limit))
+      |> order_by(asc: fragment("RAND()"))
 
     repo.all(query) |> Enum.map(& &1.queue)
   end
