@@ -320,7 +320,7 @@ defmodule Queuetopia.SchedulerTest do
                attempted_at: attempted_at,
                attempted_by: attempted_by,
                attempts: attempts,
-               error: "timeout"
+               error: "job_timeout"
              } = Queue.get_next_pending_job(TestRepo, scope, queue)
 
       assert attempts > 0

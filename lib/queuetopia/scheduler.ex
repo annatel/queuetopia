@@ -81,7 +81,7 @@ defmodule Queuetopia.Scheduler do
     Task.shutdown(task, :brutal_kill)
 
     job = Map.get(jobs, task.ref)
-    :ok = handle_task_result(repo, job, {:error, "timeout"})
+    :ok = handle_task_result(repo, job, {:error, "job_timeout"})
 
     {:noreply, %{state | jobs: Map.delete(jobs, task.ref)}}
   end
