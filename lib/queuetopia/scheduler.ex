@@ -110,12 +110,15 @@ defmodule Queuetopia.Scheduler do
 
   defp poll_queues(task_supervisor_name, poll_interval, repo, scope, jobs, opts) do
     one_time? = Keyword.get(opts, :one_time?)
-    number_of_concurrent_jobs = Keyword.get(opts, :number_of_concurrent_jobs)
+    number_of_concurrent_jobs = Keyword.get(opts, :number_of_concurrent_jobs, 0)
+    number_of_running_jobs = Enum.count(jobs)
 
     Queue.release_expired_locks(repo, scope)
 
+    limit = number_of_concurrent_jobs && number_of_concurrent_jobs - number_of_running_jobs
+
     jobs =
-      Queue.list_available_pending_queues(repo, scope, limit: number_of_concurrent_jobs)
+      Queue.list_available_pending_queues(repo, scope, limit: limit)
       |> Enum.map(&perform_next_pending_job(&1, task_supervisor_name, repo, scope))
       |> Enum.reject(&is_nil(&1))
       |> Enum.into(%{})
