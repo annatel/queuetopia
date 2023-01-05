@@ -34,6 +34,10 @@ defmodule Queuetopia.SchedulerTest do
       %{id: job_id_1} = Factory.insert!(:slow_job, params: %{"duration" => 100}, scope: scope)
       %{id: job_id_2} = Factory.insert!(:slow_job, params: %{"duration" => 100}, scope: scope)
 
+      on_exit(fn ->
+        Application.put_env(:queuetopia, TestQueuetopia, [])
+      end)
+
       Application.put_env(:queuetopia, TestQueuetopia,
         poll_interval: 50,
         number_of_concurrent_jobs: 2
@@ -52,6 +56,10 @@ defmodule Queuetopia.SchedulerTest do
 
       %{id: job_id_1} = Factory.insert!(:slow_job, params: %{"duration" => 200}, scope: scope)
       %{id: job_id_2} = Factory.insert!(:slow_job, params: %{"duration" => 90}, scope: scope)
+
+      on_exit(fn ->
+        Application.put_env(:queuetopia, TestQueuetopia, [])
+      end)
 
       Application.put_env(:queuetopia, TestQueuetopia,
         poll_interval: 50,

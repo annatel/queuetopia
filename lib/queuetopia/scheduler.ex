@@ -110,11 +110,10 @@ defmodule Queuetopia.Scheduler do
 
   defp poll_queues(task_supervisor_name, poll_interval, repo, scope, jobs, opts) do
     one_time? = Keyword.get(opts, :one_time?)
-    number_of_concurrent_jobs = Keyword.get(opts, :number_of_concurrent_jobs, 0)
+    number_of_concurrent_jobs = Keyword.fetch!(opts, :number_of_concurrent_jobs)
     number_of_running_jobs = Enum.count(jobs)
 
     Queue.release_expired_locks(repo, scope)
-
     limit = number_of_concurrent_jobs && number_of_concurrent_jobs - number_of_running_jobs
 
     jobs =
