@@ -143,7 +143,7 @@ defmodule Queuetopia.Queue do
 
     utc_now = DateTime.utc_now()
 
-    where_pending_job = fn query ->
+    where_immediately_executable_job = fn query ->
       from(q in query,
         where:
           q.scheduled_at <= ^utc_now and
@@ -158,7 +158,7 @@ defmodule Queuetopia.Queue do
       |> where([j], is_nil(j.done_at))
       |> where([j], j.scope == ^scope)
       |> where([j], j.queue not in subquery(locked_queues))
-      |> where_pending_job.()
+      |> where_immediately_executable_job.()
       |> select([:queue])
       |> distinct(true)
       |> then(&query_limit(&1, limit))
