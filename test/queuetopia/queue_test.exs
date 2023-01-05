@@ -6,35 +6,62 @@ defmodule Queuetopia.QueueTest do
   alias Queuetopia.Queue.Lock
 
   describe "list_available_pending_queues/1" do
-    test "returns available scoped queues with pending jobs" do
-      %{queue: _queue_1, scope: scope_1} = Factory.insert!(:done_job)
+    test "returns available scoped queues with immediately executable job (first execution case)" do
+      %{queue: queue, scope: scope} = insert!(:job, scheduled_at: utc_now())
 
-      %{queue: queue_2, scope: scope_2} = Factory.insert!(:job)
-      _ = Factory.insert!(:done_job, queue: queue_2, scope: scope_2)
+      assert [^queue] = Queue.list_available_pending_queues(TestRepo, scope)
+    end
 
+    test "returns available scoped queues with immediately executable job (retry case)" do
+      %{queue: queue, scope: scope} =
+        insert!(:job,
+          scheduled_at: utc_now() |> add(-3600),
+          next_attempt_at: utc_now()
+        )
+
+      assert [^queue] = Queue.list_available_pending_queues(TestRepo, scope)
+    end
+
+    test "don't list queues with not immediately executable job (first execution case)" do
+      %{scope: scope} = insert!(:job, scheduled_at: utc_now() |> add(3600))
+
+      assert [] = Queue.list_available_pending_queues(TestRepo, scope)
+    end
+
+    test "don't list queues with not immediately executable job (retry case)" do
+      %{scope: scope} =
+        insert!(:job,
+          scheduled_at: utc_now() |> add(-3600),
+          next_attempt_at: utc_now() |> add(3600)
+        )
+
+      assert [] = Queue.list_available_pending_queues(TestRepo, scope)
+    end
+
+    test "don't list queues whom jobs are done" do
+      %{queue: _queue_1, scope: scope_1} = insert!(:done_job)
       assert [] = Queue.list_available_pending_queues(TestRepo, scope_1)
-      assert [^queue_2] = Queue.list_available_pending_queues(TestRepo, scope_2)
     end
 
     test "when limit is given, returns only the specified number of rows from the result set" do
-      %{queue: queue, scope: scope} = Factory.insert!(:job)
-      Factory.insert!(:job, queue: queue, scope: scope)
+      %{queue: queue, scope: scope} = insert!(:job)
+      insert!(:job, queue: queue, scope: scope)
 
       assert [_] = Queue.list_available_pending_queues(TestRepo, scope, limit: 1)
     end
 
     test "when a queue is locked" do
-      %{queue: queue_1, scope: scope_1} = Factory.insert!(:job)
-      _ = Factory.insert!(:lock, queue: queue_1, scope: scope_1)
+      %{queue: queue_1, scope: scope_1} = insert!(:job)
+      _ = insert!(:lock, queue: queue_1, scope: scope_1)
 
       assert [] = Queue.list_available_pending_queues(TestRepo, scope_1)
     end
 
     test "there is no collision between two queues with the same name but in different scope" do
-      %{queue: queue, scope: scope_1} = Factory.insert!(:job)
-      %{scope: scope_2} = Factory.insert!(:job, queue: queue)
+      %{queue: queue, scope: scope_1} = insert!(:job)
+      %{scope: scope_2} = insert!(:job, queue: queue)
 
-      _ = Factory.insert!(:lock, queue: queue, scope: scope_1)
+      _ = insert!(:lock, queue: queue, scope: scope_1)
 
       assert [] = Queue.list_available_pending_queues(TestRepo, scope_1)
       assert [^queue] = Queue.list_available_pending_queues(TestRepo, scope_2)

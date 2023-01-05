@@ -143,7 +143,7 @@ defmodule Queuetopia.Queue do
 
     utc_now = DateTime.utc_now()
 
-    filter_fulls = fn query ->
+    where_pending_job = fn query ->
       from(q in query,
         where:
           q.scheduled_at <= ^utc_now and
@@ -158,7 +158,7 @@ defmodule Queuetopia.Queue do
       |> where([j], is_nil(j.done_at))
       |> where([j], j.scope == ^scope)
       |> where([j], j.queue not in subquery(locked_queues))
-      |> filter_fulls.()
+      |> where_pending_job.()
       |> select([:queue])
       |> distinct(true)
       |> then(&query_limit(&1, limit))
@@ -167,9 +167,9 @@ defmodule Queuetopia.Queue do
   end
 
   defp query_limit(query, limit) when is_integer(limit),
-    do: query |> ^limit |> order_by(asc: fragment("RAND()"))
+    do: query |> limit(^limit) |> order_by(asc: fragment("RAND()"))
 
-  defp query_limit(query, nil), do: query |> order_by(asc: :sequence)
+  defp query_limit(query, nil), do: query
 
   @doc """
   Get the next available pending job of a given queue by scope a.k.a by Queuetopia.
