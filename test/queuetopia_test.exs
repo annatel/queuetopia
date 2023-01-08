@@ -49,7 +49,7 @@ defmodule QueuetopiaTest do
 
   describe "create_job/5" do
     test "creates the job" do
-      jobs_params = Factory.params_for(:job)
+      jobs_params = params_for(:job)
 
       opts = [
         timeout: jobs_params.timeout,
@@ -89,7 +89,7 @@ defmodule QueuetopiaTest do
         timeout: timeout,
         max_backoff: max_backoff,
         max_attempts: max_attempts
-      } = Factory.params_for(:job)
+      } = params_for(:job)
 
       assert {:ok,
               %Job{
@@ -112,7 +112,7 @@ defmodule QueuetopiaTest do
       max_backoff = Job.default_max_backoff()
       max_attempts = Job.default_max_attempts()
 
-      %{queue: queue, action: action, params: params} = Factory.params_for(:job)
+      %{queue: queue, action: action, params: params} = params_for(:job)
 
       assert {:ok,
               %Job{
@@ -126,7 +126,7 @@ defmodule QueuetopiaTest do
       Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 5_000)
       start_supervised!(TestQueuetopia)
 
-      %{queue: queue, action: action, params: params} = Factory.params_for(:success_job)
+      %{queue: queue, action: action, params: params} = params_for(:success_job)
       assert {:ok, %Job{id: job_id}} = TestQueuetopia.create_job(queue, action, params)
 
       assert_receive {^queue, ^job_id, :ok}, 1_000
@@ -142,14 +142,14 @@ defmodule QueuetopiaTest do
   end
 
   test "list_jobs/1" do
-    %{id: id} = Factory.insert!(:job)
+    %{id: id} = insert!(:job)
 
     assert [%{id: ^id}] = TestQueuetopia.list_jobs()
   end
 
   test "paginate_jobs/1" do
-    %{id: id_1} = Factory.insert!(:job, sequence: 1)
-    %{id: id_2} = Factory.insert!(:job, sequence: 2)
+    %{id: id_1} = insert!(:job, sequence: 1)
+    %{id: id_2} = insert!(:job, sequence: 2)
 
     assert %{data: [%{id: ^id_2}], total: 2} = TestQueuetopia.paginate_jobs(1, 1)
     assert %{data: [%{id: ^id_1}], total: 2} = TestQueuetopia.paginate_jobs(1, 2)

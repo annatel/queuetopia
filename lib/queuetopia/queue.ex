@@ -136,10 +136,20 @@ defmodule Queuetopia.Queue do
   """
   @spec list_available_pending_queues(module, binary, keyword()) :: [binary]
   def list_available_pending_queues(repo, scope, opts \\ []) do
-    subset =
+    locked_queues =
       Lock
       |> select([:queue])
       |> where([l], l.scope == ^scope)
+
+    utc_now = DateTime.utc_now()
+
+    where_immediately_executable_job = fn query ->
+      from(q in query,
+        where:
+          q.scheduled_at <= ^utc_now and
+            (is_nil(q.next_attempt_at) or q.next_attempt_at <= ^utc_now)
+      )
+    end
 
     limit = Keyword.get(opts, :limit)
 
@@ -147,16 +157,18 @@ defmodule Queuetopia.Queue do
       Job
       |> where([j], is_nil(j.done_at))
       |> where([j], j.scope == ^scope)
-      |> where([j], j.queue not in subquery(subset))
+      |> where([j], j.queue not in subquery(locked_queues))
+      |> where_immediately_executable_job.()
       |> select([:queue])
       |> distinct(true)
       |> then(&query_limit(&1, limit))
-      |> order_by(asc: fragment("RAND()"))
 
     repo.all(query) |> Enum.map(& &1.queue)
   end
 
-  defp query_limit(query, limit) when is_integer(limit), do: query |> limit(^limit)
+  defp query_limit(query, limit) when is_integer(limit),
+    do: query |> limit(^limit) |> order_by(asc: fragment("RAND()"))
+
   defp query_limit(query, nil), do: query
 
   @doc """

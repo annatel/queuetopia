@@ -5,13 +5,13 @@ defmodule Queuetopia.Test.AssertionsTest do
 
   describe "jobs_created/1" do
     test "when the job is found" do
-      Factory.insert!(:job, scope: Queuetopia.TestQueuetopia.scope())
+      insert!(:job, scope: Queuetopia.TestQueuetopia.scope())
       assert [_] = jobs_created(Queuetopia.TestQueuetopia)
     end
 
     test "multiple jobs" do
-      Factory.insert!(:job, scope: Queuetopia.TestQueuetopia.scope())
-      Factory.insert!(:job, scope: Queuetopia.TestQueuetopia.scope())
+      insert!(:job, scope: Queuetopia.TestQueuetopia.scope())
+      insert!(:job, scope: Queuetopia.TestQueuetopia.scope())
       assert [_, _] = jobs_created(Queuetopia.TestQueuetopia)
     end
 
@@ -22,12 +22,12 @@ defmodule Queuetopia.Test.AssertionsTest do
 
   describe "assert_job_created/1" do
     test "when the job is found" do
-      Factory.insert!(:job, scope: Queuetopia.TestQueuetopia.scope())
+      insert!(:job, scope: Queuetopia.TestQueuetopia.scope())
       assert_job_created(Queuetopia.TestQueuetopia)
     end
 
     test "count option" do
-      Factory.insert!(:job, scope: Queuetopia.TestQueuetopia.scope())
+      insert!(:job, scope: Queuetopia.TestQueuetopia.scope())
 
       message =
         %ExUnit.AssertionError{
@@ -54,12 +54,12 @@ defmodule Queuetopia.Test.AssertionsTest do
   describe "assert_job_recorded/2" do
     test "when the job is found" do
       job =
-        Factory.insert!(:job,
+        insert!(:job,
           scope: Queuetopia.TestQueuetopia.scope(),
           params: %{"a" => 1, "b" => 2}
         )
 
-      Factory.insert!(:job, scope: Queuetopia.TestQueuetopia.scope(), params: %{"c" => 3})
+      insert!(:job, scope: Queuetopia.TestQueuetopia.scope(), params: %{"c" => 3})
 
       assert_job_created(Queuetopia.TestQueuetopia, job)
       assert_job_created(Queuetopia.TestQueuetopia, %{queue: job.queue})
@@ -69,7 +69,7 @@ defmodule Queuetopia.Test.AssertionsTest do
 
     test "when the job is not found" do
       job =
-        Factory.insert!(:job,
+        insert!(:job,
           scope: Queuetopia.TestQueuetopia.scope(),
           params: %{"a" => 1}
         )
@@ -99,7 +99,7 @@ defmodule Queuetopia.Test.AssertionsTest do
 
     test "when params is specified but not match" do
       job =
-        Factory.insert!(:job,
+        insert!(:job,
           scope: Queuetopia.TestQueuetopia.scope(),
           params: %{"a" => 1}
         )
@@ -118,12 +118,12 @@ defmodule Queuetopia.Test.AssertionsTest do
 
     test "with params and count" do
       job =
-        Factory.insert!(:job,
+        insert!(:job,
           scope: Queuetopia.TestQueuetopia.scope(),
           params: %{"a" => 1}
         )
 
-      Factory.insert!(:job,
+      insert!(:job,
         scope: Queuetopia.TestQueuetopia.scope(),
         params: %{"a" => 1}
       )
@@ -147,7 +147,7 @@ defmodule Queuetopia.Test.AssertionsTest do
     end
 
     test "when the job is created" do
-      Factory.insert!(:job, scope: Queuetopia.TestQueuetopia.scope())
+      insert!(:job, scope: Queuetopia.TestQueuetopia.scope())
 
       message =
         %ExUnit.AssertionError{
@@ -167,7 +167,7 @@ defmodule Queuetopia.Test.AssertionsTest do
     end
 
     test "when the job is created" do
-      job = Factory.insert!(:job, scope: Queuetopia.TestQueuetopia.scope(), params: %{"a" => 1})
+      job = insert!(:job, scope: Queuetopia.TestQueuetopia.scope(), params: %{"a" => 1})
 
       message =
         %ExUnit.AssertionError{

@@ -1,8 +1,7 @@
 defmodule Queuetopia.TestPerfomer do
   use Queuetopia.Performer
-
+  import Queuetopia.Factory
   alias Queuetopia.Queue.Job
-  alias Queuetopia.Factory
 
   @performer Queuetopia.TestPerfomer |> to_string()
 
@@ -17,7 +16,7 @@ defmodule Queuetopia.TestPerfomer do
           id: job_id
         } = job
       ) do
-    pid = Factory.bin_to_pid(bin_pid)
+    pid = bin_to_pid(bin_pid)
 
     case action do
       "success" ->
