@@ -24,7 +24,7 @@ defmodule Queuetopia.DataCase do
       import Queuetopia.DataCase
 
       alias Queuetopia.TestRepo
-      alias Queuetopia.Factory
+      import Queuetopia.Factory
     end
   end
 

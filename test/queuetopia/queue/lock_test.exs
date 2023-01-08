@@ -5,7 +5,7 @@ defmodule Queuetopia.Queue.LockTest do
 
   describe "changeset/2" do
     test "only permitted_keys are casted" do
-      params = Factory.params_for(:lock)
+      params = params_for(:lock)
 
       changeset = Lock.changeset(%Lock{}, Map.merge(params, %{new_key: "value"}))
 
@@ -32,9 +32,9 @@ defmodule Queuetopia.Queue.LockTest do
     end
 
     test "when a lock on a scoped queue already exists, returns a changeset error on insert" do
-      %Lock{queue: queue, scope: scope} = Factory.insert!(:lock)
+      %Lock{queue: queue, scope: scope} = insert!(:lock)
 
-      params = Factory.params_for(:lock, queue: queue, scope: scope)
+      params = params_for(:lock, queue: queue, scope: scope)
 
       assert {:error, changeset} =
                Lock.changeset(%Lock{}, params)
@@ -45,7 +45,7 @@ defmodule Queuetopia.Queue.LockTest do
     end
 
     test "when params are valid, return a valid changeset" do
-      params = Factory.params_for(:lock)
+      params = params_for(:lock)
 
       changeset = Lock.changeset(%Lock{}, params)
 

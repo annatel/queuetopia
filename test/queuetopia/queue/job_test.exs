@@ -6,7 +6,7 @@ defmodule Queuetopia.Queue.JobTest do
   describe "create_changeset/2" do
     test "only permitted_keys are casted" do
       params =
-        Factory.params_for(:job,
+        params_for(:job,
           timeout: 100,
           max_backoff: 100,
           max_attempts: 1
@@ -34,7 +34,7 @@ defmodule Queuetopia.Queue.JobTest do
 
     test "timing params default values" do
       params =
-        Factory.params_for(:job,
+        params_for(:job,
           timeout: nil,
           max_backoff: nil,
           max_attempts: nil
@@ -66,7 +66,7 @@ defmodule Queuetopia.Queue.JobTest do
 
     test "when timing params are lesser than or equal to 0 are not valid, return a invalid changeset" do
       params =
-        Factory.params_for(:job,
+        params_for(:job,
           timeout: -1,
           max_backoff: -1,
           max_attempts: -1
@@ -84,7 +84,7 @@ defmodule Queuetopia.Queue.JobTest do
 
     test "when timing params are not valid, return a invalid changeset" do
       params =
-        Factory.params_for(:job,
+        params_for(:job,
           timeout: 0.4,
           max_backoff: 0.4,
           max_attempts: 0.4
@@ -100,7 +100,7 @@ defmodule Queuetopia.Queue.JobTest do
 
     test "when params are valid, return a valid changeset" do
       params =
-        Factory.params_for(:job,
+        params_for(:job,
           timeout: 100,
           max_backoff: 100,
           max_attempts: 1
@@ -125,14 +125,14 @@ defmodule Queuetopia.Queue.JobTest do
 
   describe "failed_job_changeset/2" do
     test "only permitted_keys are casted" do
-      job = Factory.insert!(:job)
+      job = insert!(:job)
 
       params =
-        Factory.params_for(:job,
+        params_for(:job,
           attempts: 6,
-          attempted_at: Factory.utc_now(),
+          attempted_at: utc_now(),
           attempted_by: Atom.to_string(Node.self()),
-          next_attempt_at: Factory.utc_now(),
+          next_attempt_at: utc_now(),
           error: "error"
         )
 
@@ -150,7 +150,7 @@ defmodule Queuetopia.Queue.JobTest do
     end
 
     test "when required params are missing, returns an invalid changeset" do
-      job = Factory.insert!(:job)
+      job = insert!(:job)
 
       changeset = Job.failed_job_changeset(job, %{attempts: nil, scheduled_at: nil})
 
@@ -163,8 +163,8 @@ defmodule Queuetopia.Queue.JobTest do
     end
 
     test "when params are valid, return a valid changeset" do
-      utc_now = Factory.utc_now()
-      job = Factory.insert!(:job)
+      utc_now = utc_now()
+      job = insert!(:job)
 
       changeset =
         Job.failed_job_changeset(job, %{
@@ -181,14 +181,14 @@ defmodule Queuetopia.Queue.JobTest do
 
   describe "succeeded_job_changeset/2" do
     test "only permitted_keys are casted" do
-      job = Factory.insert!(:job)
+      job = insert!(:job)
 
       params =
-        Factory.params_for(:job,
+        params_for(:job,
           attempts: 6,
-          attempted_at: Factory.utc_now(),
+          attempted_at: utc_now(),
           attempted_by: Atom.to_string(Node.self()),
-          done_at: Factory.utc_now()
+          done_at: utc_now()
         )
 
       changeset = Job.succeeded_job_changeset(job, Map.merge(params, %{new_key: "value"}))
@@ -204,7 +204,7 @@ defmodule Queuetopia.Queue.JobTest do
     end
 
     test "when required params are missing, returns an invalid changeset" do
-      job = Factory.insert!(:job)
+      job = insert!(:job)
 
       changeset = Job.succeeded_job_changeset(job, %{attempts: nil})
       refute changeset.valid?
@@ -215,14 +215,14 @@ defmodule Queuetopia.Queue.JobTest do
     end
 
     test "nillifies error field" do
-      job = Factory.insert!(:job, error: "error")
+      job = insert!(:job, error: "error")
 
       params =
-        Factory.params_for(:job,
+        params_for(:job,
           attempts: 6,
-          attempted_at: Factory.utc_now(),
+          attempted_at: utc_now(),
           attempted_by: Atom.to_string(Node.self()),
-          done_at: Factory.utc_now()
+          done_at: utc_now()
         )
 
       changeset = Job.succeeded_job_changeset(job, params)
@@ -231,8 +231,8 @@ defmodule Queuetopia.Queue.JobTest do
     end
 
     test "when params are valid, return a valid changeset" do
-      utc_now = Factory.utc_now()
-      job = Factory.insert!(:job)
+      utc_now = utc_now()
+      job = insert!(:job)
 
       changeset =
         Job.succeeded_job_changeset(job, %{
@@ -247,13 +247,13 @@ defmodule Queuetopia.Queue.JobTest do
   end
 
   test "email_subject/1" do
-    job = Factory.insert!(:job)
+    job = insert!(:job)
 
     assert Job.email_subject(job) == "[#{job.scope} - Failed job (#{job.id})]"
   end
 
   test "email_html_body/1" do
-    job = Factory.insert!(:job)
+    job = insert!(:job)
 
     assert Job.email_html_body(job) ==
              """
