@@ -27,23 +27,71 @@ defmodule Queuetopia.SchedulerTest do
     assert_receive {^queue, _, :ok}, 150
   end
 
-  test "poll number_of_concurrent_jobs" do
-    scope = TestQueuetopia.scope()
+  describe "concurrent jobs" do
+    test "poll number_of_concurrent_jobs" do
+      scope = TestQueuetopia.scope()
 
-    %{id: job_id_1} = insert!(:slow_job, params: %{"duration" => 100}, scope: scope)
-    %{id: job_id_2} = insert!(:slow_job, params: %{"duration" => 100}, scope: scope)
+      %{id: job_id_1} = insert!(:slow_job, params: %{"duration" => 100}, scope: scope)
+      %{id: job_id_2} = insert!(:slow_job, params: %{"duration" => 100}, scope: scope)
 
-    Application.put_env(:queuetopia, TestQueuetopia,
-      poll_interval: 50,
-      number_of_concurrent_jobs: 2
-    )
+      on_exit(fn ->
+        Application.put_env(:queuetopia, TestQueuetopia, [])
+      end)
 
-    start_supervised!(TestQueuetopia)
+      Application.put_env(:queuetopia, TestQueuetopia,
+        poll_interval: 50,
+        number_of_concurrent_jobs: 2
+      )
 
-    assert_receive {_, ^job_id_1, :started}, 50
-    assert_receive {_, ^job_id_2, :started}, 50
+      start_supervised!(TestQueuetopia)
 
-    :sys.get_state(TestQueuetopia.Scheduler)
+      assert_receive {_, ^job_id_1, :started}, 50
+      assert_receive {_, ^job_id_2, :started}, 50
+
+      :sys.get_state(TestQueuetopia.Scheduler)
+    end
+
+    test "ensures concurrent jobs never pass the configured number_of_concurrent_jobs" do
+      scope = TestQueuetopia.scope()
+
+      %{id: job_id_1} = insert!(:slow_job, params: %{"duration" => 200}, scope: scope)
+      %{id: job_id_2} = insert!(:slow_job, params: %{"duration" => 90}, scope: scope)
+
+      on_exit(fn ->
+        Application.put_env(:queuetopia, TestQueuetopia, [])
+      end)
+
+      Application.put_env(:queuetopia, TestQueuetopia,
+        poll_interval: 50,
+        number_of_concurrent_jobs: 2
+      )
+
+      start_supervised!(TestQueuetopia)
+
+      assert_receive {_, _, :started}, 50
+      assert_receive {_, _, :started}, 50
+      %{jobs: jobs} = :sys.get_state(TestQueuetopia.Scheduler)
+      job_ids = jobs |> Enum.map(fn {_, job} -> job.id end)
+      assert job_id_1 in job_ids
+      assert job_id_2 in job_ids
+
+      %{id: job_id_3} = insert!(:slow_job, params: %{"duration" => 100}, scope: scope)
+
+      refute_receive {_, _, :started}, 30
+      %{jobs: jobs} = :sys.get_state(TestQueuetopia.Scheduler)
+      job_ids = jobs |> Enum.map(fn {_, job} -> job.id end)
+      assert job_id_1 in job_ids
+      assert job_id_2 in job_ids
+
+      assert_receive {_, _, :ok}, 100
+      assert_receive {_, _, :started}, 100
+      %{jobs: jobs} = :sys.get_state(TestQueuetopia.Scheduler)
+      job_ids = jobs |> Enum.map(fn {_, job} -> job.id end)
+      assert job_id_1 in job_ids
+      assert job_id_3 in job_ids
+
+      :sys.get_state(TestQueuetopia.Scheduler)
+    end
   end
 
   test "poll only queues of its scope" do
