@@ -57,6 +57,13 @@ defmodule Queuetopia.QueueTest do
       assert [] = Queue.list_available_pending_queues(TestRepo, scope_1)
     end
 
+    test "when a queue is blocked" do
+      %{queue: queue_1, scope: scope_1} = insert!(:job, next_attempt_at: utc_now() |> add(3600))
+      insert!(:job, queue: queue_1, scope: scope_1)
+
+      assert [] = Queue.list_available_pending_queues(TestRepo, scope_1)
+    end
+
     test "there is no collision between two queues with the same name but in different scope" do
       %{queue: queue, scope: scope_1} = insert!(:job)
       %{scope: scope_2} = insert!(:job, queue: queue)
