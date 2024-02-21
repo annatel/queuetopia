@@ -140,7 +140,6 @@ defmodule Queuetopia.Scheduler do
          {:ok, job} <- Queue.fetch_job(repo, job) do
       task = Task.Supervisor.async_nolink(task_supervisor_name, Queue, :perform, [job])
 
-      Process.info(task.pid) |> IO.inspect()
 
       Process.send_after(self(), {:kill, task}, job.timeout)
       {task.ref, job}
