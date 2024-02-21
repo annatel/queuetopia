@@ -159,6 +159,9 @@ defmodule Queuetopia.SchedulerTest do
     Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 500)
     start_supervised!(TestQueuetopia)
 
+    for pid <- Process.list(),
+        do: {pid, Process.info(pid, :registered_name)} |> IO.inspect(limit: :infinity)
+
     assert_receive {^queue, _, :started}, 500
     assert_receive {^queue, _, :timeout}, 3_000
     refute_receive {^queue, _, :started}, 500

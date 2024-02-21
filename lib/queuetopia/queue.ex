@@ -136,18 +136,26 @@ defmodule Queuetopia.Queue do
   """
   @spec list_available_pending_queues(module, binary, keyword()) :: [binary]
   def list_available_pending_queues(repo, scope, opts \\ []) do
+    utc_now = DateTime.utc_now()
+
     locked_queues =
       Lock
       |> select([:queue])
       |> where([l], l.scope == ^scope)
 
-    utc_now = DateTime.utc_now()
+    blocked_queues =
+      Job
+      |> select([:queue])
+      |> where([j], j.scope == ^scope)
+      |> where([j], is_nil(j.done_at))
+      |> where([j], j.scheduled_at <= ^utc_now and j.next_attempt_at > ^utc_now)
 
-    where_immediately_executable_job = fn query ->
-      from(q in query,
-        where:
-          q.scheduled_at <= ^utc_now and
-            (is_nil(q.next_attempt_at) or q.next_attempt_at <= ^utc_now)
+    where_immediately_executable_job = fn queryable ->
+      queryable
+      |> where(
+        [j],
+        j.scheduled_at <= ^utc_now and
+          (is_nil(j.next_attempt_at) or j.next_attempt_at <= ^utc_now)
       )
     end
 
@@ -155,9 +163,10 @@ defmodule Queuetopia.Queue do
 
     query =
       Job
-      |> where([j], is_nil(j.done_at))
       |> where([j], j.scope == ^scope)
+      |> where([j], is_nil(j.done_at))
       |> where([j], j.queue not in subquery(locked_queues))
+      |> where([j], j.queue not in subquery(blocked_queues))
       |> where_immediately_executable_job.()
       |> select([:queue])
       |> distinct(true)
