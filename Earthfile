@@ -1,4 +1,4 @@
-VERSION 0.5
+VERSION 0.7
 
 elixir-base:
     FROM elixir:1.12.2-alpine
@@ -26,13 +26,14 @@ lint:
 test:
     FROM earthly/dind:alpine
     WORKDIR /test
+
     RUN apk add --no-progress --update mysql-client postgresql-client
-    
+
     COPY --dir config lib priv test .
     COPY README.md .
-    
+
     ARG PG_IMG="postgres:11.11"
-    ARG MYSQL_IMG="mysql:5.7"
+    ARG MYSQL_IMG="mysql:8.0"
 
     WITH DOCKER --pull "$PG_IMG" --pull "$MYSQL_IMG" --load elixir:latest=+deps --build-arg MIX_ENV="test"
         RUN set -e; \
@@ -60,7 +61,7 @@ test:
         docker run \
             --rm \
             -e MIX_ENV=test \
-            -e EX_LOG_LEVEL=warn \
+            -e EX_LOG_LEVEL=warning \
             -e QUEUETOPIA__DATABASE_TEST_URL="ecto://root:root@localhost:3306/queuetopia" \
             -e QUEUETOPIA__DATABASE_TEST_REPO_ADAPTER=myxql \
             --network host \

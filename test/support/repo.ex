@@ -1,5 +1,5 @@
 defmodule Queuetopia.TestRepo do
-  @test_repo_adapter Application.get_env(:queuetopia, :test_repo_adapter)
+  @test_repo_adapter Application.compile_env(:queuetopia, :test_repo_adapter)
   @test_repo_adapter_options %{
     "myxql" => Ecto.Adapters.MyXQL,
     "postgres" => Ecto.Adapters.Postgres
