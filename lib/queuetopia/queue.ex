@@ -136,6 +136,17 @@ defmodule Queuetopia.Queue do
   """
   @spec list_available_pending_queues(module, binary, keyword()) :: [binary]
   def list_available_pending_queues(repo, scope, opts \\ []) do
+    {:ok, result} =  repo.transaction(fn ->
+      repo.query("SET @wsrep_sync_wait_orig = @@wsrep_sync_wait;")
+      repo.query("SET SESSION wsrep_sync_wait = GREATEST(@wsrep_sync_wait_orig, 1);")
+      result = unsynced_list_available_pending_queues(repo, scope, opts)
+      repo.query("SET SESSION wsrep_sync_wait = @wsrep_sync_wait_orig;")
+      result
+    end)
+    result
+  end
+
+  defp unsynced_list_available_pending_queues(repo, scope, opts) do
     utc_now = DateTime.utc_now()
 
     locked_queues =
