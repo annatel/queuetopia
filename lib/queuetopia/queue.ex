@@ -250,14 +250,18 @@ defmodule Queuetopia.Queue do
     utc_now = DateTime.utc_now() |> DateTime.truncate(:second)
     performer = resolve_performer(job)
     backoff = performer.backoff(job)
+    attempts = job.attempts + 1
+    done_at = (attempts >= job.max_attempts && utc_now) || nil
+    next_attempt_at = (is_nil(done_at) && DateTime.add(utc_now, backoff, :millisecond)) || nil
 
     job
     |> Job.failed_job_changeset(%{
-      attempts: job.attempts + 1,
+      attempts: attempts,
       attempted_at: utc_now,
       attempted_by: Atom.to_string(Node.self()),
-      next_attempt_at: utc_now |> DateTime.add(backoff, :millisecond),
-      error: error
+      next_attempt_at: next_attempt_at,
+      error: error,
+      done_at: done_at
     })
     |> repo.update!()
     |> tap(&performer.handle_failed_job!/1)

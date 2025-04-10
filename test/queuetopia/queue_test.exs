@@ -346,6 +346,20 @@ defmodule Queuetopia.QueueTest do
                      100
     end
 
+    test "when max_attempts for failed job is reached, persists the job as failed and set done_at" do
+      job = insert!(:failure_job, max_attempts: 1)
+
+      _ = Queue.persist_result!(TestRepo, job, {:error, "error"})
+
+      %Job{} = job = TestRepo.reload(job)
+      refute is_nil(job.done_at)
+      refute is_nil(job.attempted_at)
+      assert job.done_at == job.attempted_at
+      assert job.attempts == 1
+      assert job.max_attempts == 1
+      assert job.error == "error"
+    end
+
     test "by default, backoff is exponential for retry" do
       job = insert!(:failure_job, max_backoff: 10 * 60 * 1_000)
 

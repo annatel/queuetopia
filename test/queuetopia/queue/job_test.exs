@@ -158,22 +158,76 @@ defmodule Queuetopia.Queue.JobTest do
       assert %{attempts: ["can't be blank"]} = errors_on(changeset)
       assert %{attempted_at: ["can't be blank"]} = errors_on(changeset)
       assert %{attempted_by: ["can't be blank"]} = errors_on(changeset)
-      assert %{next_attempt_at: ["can't be blank"]} = errors_on(changeset)
       assert %{error: ["can't be blank"]} = errors_on(changeset)
+    end
+
+    test "when combination of {:next_attempt_at, :done_at} params is wrong, returns an invalid changeset" do
+      utc_now = utc_now()
+      job = insert!(:job)
+
+      valid_params = %{
+        attempted_at: utc_now,
+        attempted_by: Atom.to_string(Node.self()),
+        error: "error"
+      }
+
+      changeset =
+        Job.failed_job_changeset(
+          job,
+          Map.merge(valid_params, %{
+            next_attempt_at: utc_now,
+            done_at: utc_now
+          })
+        )
+
+      refute changeset.valid?
+
+      assert %{icc_id: ["only one of next_attempt_at or done_at must be set"]} =
+               errors_on(changeset)
+
+      changeset =
+        Job.failed_job_changeset(
+          job,
+          Map.merge(valid_params, %{
+            next_attempt_at: nil,
+            done_at: nil
+          })
+        )
+
+      refute changeset.valid?
+
+      assert %{icc_id: ["only one of next_attempt_at or done_at must be set"]} =
+               errors_on(changeset)
     end
 
     test "when params are valid, return a valid changeset" do
       utc_now = utc_now()
       job = insert!(:job)
 
+      valid_params = %{
+        attempts: 1,
+        attempted_at: utc_now,
+        attempted_by: Atom.to_string(Node.self()),
+        error: "error"
+      }
+
       changeset =
-        Job.failed_job_changeset(job, %{
-          attempts: 1,
-          attempted_at: utc_now,
-          attempted_by: Atom.to_string(Node.self()),
-          next_attempt_at: utc_now,
-          error: "error"
-        })
+        Job.failed_job_changeset(
+          job,
+          Map.merge(valid_params, %{
+            next_attempt_at: utc_now
+          })
+        )
+
+      assert changeset.valid?
+
+      changeset =
+        Job.failed_job_changeset(
+          job,
+          Map.merge(valid_params, %{
+            done_at: utc_now
+          })
+        )
 
       assert changeset.valid?
     end

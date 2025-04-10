@@ -2,7 +2,18 @@ defmodule Queuetopia.Queue.Job do
   @moduledoc false
 
   use Ecto.Schema
-  import Ecto.Changeset, only: [cast: 3, put_change: 3, validate_number: 3, validate_required: 2]
+
+  import Ecto.Changeset,
+    only: [
+      add_error: 3,
+      cast: 3,
+      fetch_field!: 2,
+      put_change: 3,
+      validate_number: 3,
+      validate_required: 2
+    ]
+
+  import AntlUtilsEcto.Changeset, only: [on_valid_changeset: 2]
 
   @type t :: %__MODULE__{}
   @type option ::
@@ -76,9 +87,10 @@ defmodule Queuetopia.Queue.Job do
   @spec failed_job_changeset(Job.t(), map) :: Ecto.Changeset.t()
   def failed_job_changeset(%__MODULE__{} = job, attrs) when is_map(attrs) do
     job
-    |> cast(attrs, [:attempts, :attempted_at, :attempted_by, :next_attempt_at, :error])
+    |> cast(attrs, [:attempts, :attempted_at, :attempted_by, :next_attempt_at, :done_at, :error])
     |> validate_required_attempt_attributes
-    |> validate_required([:next_attempt_at, :error])
+    |> validate_required([:error])
+    |> on_valid_changeset(&validate_attributes_combination(&1, {:next_attempt_at, :done_at}))
   end
 
   @spec succeeded_job_changeset(Job.t(), map) :: Ecto.Changeset.t()
@@ -93,6 +105,19 @@ defmodule Queuetopia.Queue.Job do
   defp validate_required_attempt_attributes(changeset) do
     changeset
     |> validate_required([:attempts, :attempted_at, :attempted_by])
+  end
+
+  defp validate_attributes_combination(changeset, {:next_attempt_at, :done_at}) do
+    case {fetch_field!(changeset, :next_attempt_at), fetch_field!(changeset, :done_at)} do
+      {%DateTime{}, nil} ->
+        changeset
+
+      {nil, %DateTime{}} ->
+        changeset
+
+      _ ->
+        changeset |> add_error(:icc_id, "only one of next_attempt_at or done_at must be set")
+    end
   end
 
   def email_subject(%__MODULE__{} = job) do
