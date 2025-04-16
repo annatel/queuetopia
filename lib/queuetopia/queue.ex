@@ -251,8 +251,8 @@ defmodule Queuetopia.Queue do
     performer = resolve_performer(job)
     backoff = performer.backoff(job)
     attempts = job.attempts + 1
-    done_at = (attempts >= job.max_attempts && utc_now) || nil
-    next_attempt_at = (is_nil(done_at) && DateTime.add(utc_now, backoff, :millisecond)) || nil
+    done_at = attempts >= job.max_attempts && utc_now || nil
+    next_attempt_at = is_nil(done_at) && DateTime.add(utc_now, backoff, :millisecond) || nil
 
     job
     |> Job.failed_job_changeset(%{
