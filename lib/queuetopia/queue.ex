@@ -108,7 +108,7 @@ defmodule Queuetopia.Queue do
   """
   @spec processable_now?(Job.t()) :: boolean
   def processable_now?(%Job{} = job) do
-    not done?(job) and scheduled_for_now?(job)
+    not done?(job) and not skipped?(job) and scheduled_for_now?(job)
   end
 
   @doc """
@@ -118,6 +118,15 @@ defmodule Queuetopia.Queue do
   @spec done?(Job.t()) :: boolean
   def done?(%Job{} = job) do
     not is_nil(job.done_at)
+  end
+
+  @doc """
+  Returns true if a job is skipped.
+  Otherwise, returns false.
+  """
+  @spec skipped?(Job.t()) :: boolean
+  def skipped?(%Job{} = job) do
+    job.attempts >= job.max_attempts
   end
 
   @doc """
@@ -165,6 +174,7 @@ defmodule Queuetopia.Queue do
       Job
       |> where([j], j.scope == ^scope)
       |> where([j], is_nil(j.done_at))
+      |> where([j], j.attempts < j.max_attempts)
       |> where([j], j.queue not in subquery(locked_queues))
       |> where([j], j.queue not in subquery(blocked_queues))
       |> where_immediately_executable_job.()
@@ -191,6 +201,7 @@ defmodule Queuetopia.Queue do
       |> where([j], j.queue == ^queue)
       |> where([j], j.scope == ^scope)
       |> where([j], is_nil(j.done_at))
+      |> where([j], j.attempts < j.max_attempts)
       |> order_by(asc: :scheduled_at, asc: :sequence)
       |> limit(1)
       |> repo.one()
@@ -212,10 +223,12 @@ defmodule Queuetopia.Queue do
       job = repo.get(Job, id)
 
       with {:done?, false} <- {:done?, done?(job)},
+           {:skipped?, false} <- {:skipped?, skipped?(job)},
            {:scheduled_for_now?, true} <- {:scheduled_for_now?, scheduled_for_now?(job)} do
         {:ok, job}
       else
         {:done?, true} -> {:error, "already done"}
+        {:skipped?, true} -> {:error, "skipped"}
         {:scheduled_for_now?, false} -> {:error, "scheduled for later"}
       end
     end)

@@ -43,6 +43,18 @@ defmodule Queuetopia.QueueTest do
       assert [] = Queue.list_available_pending_queues(TestRepo, scope_1)
     end
 
+    test "don't list queues whom jobs are skipped due to reaching the maximum number of attempts" do
+      %{queue: _queue, scope: scope} =
+        insert!(:job,
+          scheduled_at: utc_now() |> add(-3600),
+          next_attempt_at: utc_now(),
+          attempts: 5,
+          max_attempts: 5
+        )
+
+      assert [] = Queue.list_available_pending_queues(TestRepo, scope)
+    end
+
     test "when limit is given, returns only the specified number of rows from the result set" do
       %{queue: queue, scope: scope} = insert!(:job)
       insert!(:job, queue: queue, scope: scope)
@@ -146,6 +158,13 @@ defmodule Queuetopia.QueueTest do
 
       assert is_nil(Queue.get_next_pending_job(TestRepo, scope, queue))
     end
+
+    test "when job skipped due to reaching the maximum number of attempts, returns nil" do
+      %Job{queue: queue, scope: scope} =
+        insert!(:job, next_attempt_at: utc_now(), attempts: 20, max_attempts: 20)
+
+      assert is_nil(Queue.get_next_pending_job(TestRepo, scope, queue))
+    end
   end
 
   describe "fetch_job/2" do
@@ -173,6 +192,13 @@ defmodule Queuetopia.QueueTest do
       %Job{queue: queue, scope: scope} = job = insert!(:done_job)
 
       assert {:error, "already done"} = Queue.fetch_job(TestRepo, job)
+      assert is_nil(TestRepo.get_by(Lock, scope: scope, queue: queue))
+    end
+
+    test "when the job is skipped due to reaching the maximum number of attempts" do
+      %{queue: queue, scope: scope} = job = insert!(:job, attempts: 20, max_attempts: 20)
+
+      assert {:error, "skipped"} = Queue.fetch_job(TestRepo, job)
       assert is_nil(TestRepo.get_by(Lock, scope: scope, queue: queue))
     end
 
@@ -428,6 +454,11 @@ defmodule Queuetopia.QueueTest do
       refute Queue.processable_now?(job)
     end
 
+    test "when the job is skipped due to reaching the maximum number of attempts" do
+      job = insert!(:job, attempts: 10, max_attempts: 10)
+      refute Queue.processable_now?(job)
+    end
+
     test "when the job is scheduled for later" do
       job = insert!(:job, scheduled_at: utc_now() |> add(3600, :second))
       refute Queue.processable_now?(job)
@@ -443,6 +474,18 @@ defmodule Queuetopia.QueueTest do
     test "when the job is done" do
       job = insert!(:done_job)
       assert Queue.done?(job)
+    end
+  end
+
+  describe "skipped?/1" do
+    test "when the job is not skipped" do
+      job = insert!(:job)
+      refute Queue.skipped?(job)
+    end
+
+    test "when the maximum number of attempts reached" do
+      job = insert!(:job, attempts: 10, max_attempts: 10)
+      assert Queue.skipped?(job)
     end
   end
 
@@ -522,6 +565,11 @@ defmodule Queuetopia.QueueTest do
       assert %{data: [], total: 0} =
                Queue.paginate_jobs(TestRepo, 100, 1, filters: [available?: true])
 
+      insert!(:job, attempts: 3, max_attempts: 3)
+
+      assert %{data: [], total: 0} =
+               Queue.paginate_jobs(TestRepo, 100, 1, filters: [available?: true])
+
       %{id: id} = job = insert!(:job)
 
       [
@@ -579,6 +627,10 @@ defmodule Queuetopia.QueueTest do
 
     test "filters" do
       insert!(:job, done_at: utc_now())
+
+      assert Queue.list_jobs(TestRepo, filters: [available?: true]) == []
+
+      insert!(:job, attempts: 1, max_attempts: 1)
 
       assert Queue.list_jobs(TestRepo, filters: [available?: true]) == []
 
