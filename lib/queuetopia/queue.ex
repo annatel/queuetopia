@@ -103,30 +103,30 @@ defmodule Queuetopia.Queue do
   end
 
   @doc """
-  Returns true if a job scheduled date is reached and the job is not done yet.
+  Returns true if a job scheduled date is reached and the job is not ended yet.
   Otherwise, returns false.
   """
   @spec processable_now?(Job.t()) :: boolean
   def processable_now?(%Job{} = job) do
-    not done?(job) and not skipped?(job) and scheduled_for_now?(job)
+    not ended?(job) and scheduled_for_now?(job)
   end
 
   @doc """
-  Returns true if a job is done.
+  Returns true if a job is successfully ended.
   Otherwise, returns false.
   """
   @spec done?(Job.t()) :: boolean
   def done?(%Job{} = job) do
-    not is_nil(job.done_at)
+    ended?(job) and job.end_status == "success"
   end
 
   @doc """
-  Returns true if a job is skipped.
+  Returns true if a job is somehow ended.
   Otherwise, returns false.
   """
-  @spec skipped?(Job.t()) :: boolean
-  def skipped?(%Job{} = job) do
-    job.attempts >= job.max_attempts
+  @spec ended?(Job.t()) :: boolean
+  def ended?(%Job{} = job) do
+    not is_nil(job.ended_at)
   end
 
   @doc """
@@ -156,7 +156,7 @@ defmodule Queuetopia.Queue do
       Job
       |> select([:queue])
       |> where([j], j.scope == ^scope)
-      |> where([j], is_nil(j.done_at))
+      |> where([j], is_nil(j.ended_at))
       |> where([j], j.scheduled_at <= ^utc_now and j.next_attempt_at > ^utc_now)
 
     where_immediately_executable_job = fn queryable ->
@@ -173,8 +173,7 @@ defmodule Queuetopia.Queue do
     query =
       Job
       |> where([j], j.scope == ^scope)
-      |> where([j], is_nil(j.done_at))
-      |> where([j], j.attempts < j.max_attempts)
+      |> where([j], is_nil(j.ended_at))
       |> where([j], j.queue not in subquery(locked_queues))
       |> where([j], j.queue not in subquery(blocked_queues))
       |> where_immediately_executable_job.()
@@ -200,8 +199,7 @@ defmodule Queuetopia.Queue do
       Job
       |> where([j], j.queue == ^queue)
       |> where([j], j.scope == ^scope)
-      |> where([j], is_nil(j.done_at))
-      |> where([j], j.attempts < j.max_attempts)
+      |> where([j], is_nil(j.ended_at))
       |> order_by(asc: :scheduled_at, asc: :sequence)
       |> limit(1)
       |> repo.one()
@@ -222,13 +220,11 @@ defmodule Queuetopia.Queue do
     |> Ecto.Multi.run(:job, fn _, _ ->
       job = repo.get(Job, id)
 
-      with {:done?, false} <- {:done?, done?(job)},
-           {:skipped?, false} <- {:skipped?, skipped?(job)},
+      with {:ended?, false} <- {:ended?, ended?(job)},
            {:scheduled_for_now?, true} <- {:scheduled_for_now?, scheduled_for_now?(job)} do
         {:ok, job}
       else
-        {:done?, true} -> {:error, "already done"}
-        {:skipped?, true} -> {:error, "skipped"}
+        {:ended?, true} -> {:error, "already ended"}
         {:scheduled_for_now?, false} -> {:error, "scheduled for later"}
       end
     end)
@@ -259,13 +255,30 @@ defmodule Queuetopia.Queue do
   def persist_result!(repo, %Job{} = job, unexpected_response),
     do: persist_failure!(repo, job, inspect(unexpected_response))
 
+  defp persist_failure!(repo, %Job{attempts: attempts, max_attempts: max_attempts} = job, error)
+    when attempts + 1 >= max_attempts do
+    utc_now = DateTime.utc_now() |> DateTime.truncate(:second)
+    performer = resolve_performer(job)
+
+    job
+    |> Job.failed_job_changeset(%{
+      attempts: job.attempts + 1,
+      attempted_at: utc_now,
+      attempted_by: Atom.to_string(Node.self()),
+      ended_at: utc_now,
+      error: error,
+    })
+    |> repo.update!()
+    |> tap(&performer.handle_failed_job!/1)
+  end
+
   defp persist_failure!(repo, %Job{} = job, error) do
     utc_now = DateTime.utc_now() |> DateTime.truncate(:second)
     performer = resolve_performer(job)
     backoff = performer.backoff(job)
 
     job
-    |> Job.failed_job_changeset(%{
+    |> Job.retry_job_changeset(%{
       attempts: job.attempts + 1,
       attempted_at: utc_now,
       attempted_by: Atom.to_string(Node.self()),
@@ -284,7 +297,7 @@ defmodule Queuetopia.Queue do
       attempts: job.attempts + 1,
       attempted_at: utc_now,
       attempted_by: Atom.to_string(Node.self()),
-      done_at: utc_now
+      ended_at: utc_now
     })
     |> repo.update!()
   end

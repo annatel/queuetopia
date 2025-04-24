@@ -42,10 +42,16 @@ defmodule Queuetopia.Factory do
     |> struct!(attrs)
   end
 
+  def build(:ended_job, attrs) do
+    job = build(:job, attrs)
+
+    %{job | ended_at: utc_now()}
+  end
+
   def build(:done_job, attrs) do
     job = build(:job, attrs)
 
-    %{job | done_at: utc_now()}
+    %{job | ended_at: utc_now(), end_status: "success"}
   end
 
   def build(:raising_job, attrs) do
