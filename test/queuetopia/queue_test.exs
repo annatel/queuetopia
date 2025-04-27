@@ -381,7 +381,11 @@ defmodule Queuetopia.QueueTest do
           next_attempt_at: next_attempt_at
         } = TestRepo.reload(job)
 
-        assert :eq = DateTime.compare(next_attempt_at, DateTime.add(attempted_at, backoff, :millisecond))
+        assert :eq =
+                 DateTime.compare(
+                   next_attempt_at,
+                   DateTime.add(attempted_at, backoff, :millisecond)
+                 )
       end)
     end
 
@@ -423,7 +427,11 @@ defmodule Queuetopia.QueueTest do
         next_attempt_at: next_attempt_at
       } = TestRepo.reload(job)
 
-      assert :eq = DateTime.compare(next_attempt_at, DateTime.add(attempted_at, max_backoff, :millisecond))
+      assert :eq =
+               DateTime.compare(
+                 next_attempt_at,
+                 DateTime.add(attempted_at, max_backoff, :millisecond)
+               )
 
       _ = Queue.persist_result!(TestRepo, job, {:error, "error"})
 
@@ -433,7 +441,11 @@ defmodule Queuetopia.QueueTest do
         next_attempt_at: next_attempt_at
       } = TestRepo.reload(job)
 
-      assert :eq = DateTime.compare(next_attempt_at, DateTime.add(attempted_at, max_backoff, :millisecond))
+      assert :eq =
+               DateTime.compare(
+                 next_attempt_at,
+                 DateTime.add(attempted_at, max_backoff, :millisecond)
+               )
     end
   end
 

@@ -256,7 +256,7 @@ defmodule Queuetopia.Queue do
     do: persist_failure!(repo, job, inspect(unexpected_response))
 
   defp persist_failure!(repo, %Job{attempts: attempts, max_attempts: max_attempts} = job, error)
-    when attempts + 1 >= max_attempts do
+       when attempts + 1 >= max_attempts do
     utc_now = DateTime.utc_now() |> DateTime.truncate(:second)
     performer = resolve_performer(job)
 
@@ -266,7 +266,7 @@ defmodule Queuetopia.Queue do
       attempted_at: utc_now,
       attempted_by: Atom.to_string(Node.self()),
       ended_at: utc_now,
-      error: error,
+      error: error
     })
     |> repo.update!()
     |> tap(&performer.handle_failed_job!/1)
