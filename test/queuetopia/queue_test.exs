@@ -330,7 +330,7 @@ defmodule Queuetopia.QueueTest do
       assert job.attempted_by == Atom.to_string(Node.self())
       assert job.attempts == 10
       assert job.error == "error"
-      assert job.end_status == "failed"
+      assert job.end_status == "max_attempts_reached"
     end
 
     test "when a job returns an unexpected_response, persists the job and record the error and the response" do

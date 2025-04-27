@@ -189,6 +189,7 @@ defmodule Queuetopia.Queue.JobTest do
           attempted_at: utc_now(),
           attempted_by: Atom.to_string(Node.self()),
           ended_at: utc_now(),
+          end_status: "failed",
           error: "error"
         )
 
@@ -219,7 +220,7 @@ defmodule Queuetopia.Queue.JobTest do
       assert %{error: ["can't be blank"]} = errors_on(changeset)
     end
 
-    test "fills the end_status field by 'failed'" do
+    test "when invalid end_status is given, returns an invalid changeset" do
       job = insert!(:job)
 
       changeset =
@@ -228,10 +229,12 @@ defmodule Queuetopia.Queue.JobTest do
           attempted_at: utc_now(),
           attempted_by: Atom.to_string(Node.self()),
           ended_at: utc_now(),
+          end_status: "some_unsupported_invalid_status",
           error: "error"
         })
 
-      assert changeset.changes.end_status == "failed"
+      refute changeset.valid?
+      assert %{end_status: ["is invalid"]} = errors_on(changeset)
     end
 
     test "when params are valid, return a valid changeset" do
@@ -242,6 +245,50 @@ defmodule Queuetopia.Queue.JobTest do
           attempts: 1,
           attempted_at: utc_now(),
           attempted_by: Atom.to_string(Node.self()),
+          ended_at: utc_now(),
+          end_status: "failed",
+          error: "error"
+        })
+
+      assert changeset.valid?
+    end
+  end
+
+  describe "aborted_job_changeset/2" do
+    test "only permitted_keys are casted" do
+      job = insert!(:job)
+
+      params =
+        params_for(:job,
+          ended_at: utc_now(),
+          error: "error"
+        )
+
+      changeset = Job.failed_job_changeset(job, Map.merge(params, %{new_key: "value"}))
+      changes_keys = changeset.changes |> Map.keys()
+
+      assert :ended_at in changes_keys
+      assert :error in changes_keys
+      assert Enum.count(changes_keys) == 2
+
+      refute :new_key in changes_keys
+    end
+
+    test "when required params are missing, returns an invalid changeset" do
+      job = insert!(:job)
+
+      changeset = Job.aborted_job_changeset(job, %{attempts: nil, scheduled_at: nil})
+
+      refute changeset.valid?
+      assert %{ended_at: ["can't be blank"]} = errors_on(changeset)
+      assert %{error: ["can't be blank"]} = errors_on(changeset)
+    end
+
+    test "when params are valid, return a valid changeset" do
+      job = insert!(:job)
+
+      changeset =
+        Job.aborted_job_changeset(job, %{
           ended_at: utc_now(),
           error: "error"
         })

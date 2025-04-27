@@ -266,6 +266,7 @@ defmodule Queuetopia.Queue do
       attempted_at: utc_now,
       attempted_by: Atom.to_string(Node.self()),
       ended_at: utc_now,
+      end_status: "max_attempts_reached",
       error: error
     })
     |> repo.update!()
