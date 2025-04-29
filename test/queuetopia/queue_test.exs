@@ -618,6 +618,43 @@ defmodule Queuetopia.QueueTest do
     end
   end
 
+  test "unique_constraint" do
+    params = params_for(:job)
+
+    opts = [
+      timeout: params.timeout,
+      max_backoff: params.max_backoff,
+      max_attempts: params.max_attempts
+    ]
+
+    {:ok, job} =
+      Queue.create_job(
+        TestRepo,
+        params.performer,
+        params.scope,
+        params.queue,
+        params.action,
+        params.params,
+        params.scheduled_at,
+        opts
+      )
+
+    Queuetopia.TestRepo.query!("update queuetopia_sequences set sequence = ?;", [job.sequence - 1])
+
+    assert_raise Ecto.ConstraintError, fn ->
+      Queue.create_job(
+        TestRepo,
+        params.performer,
+        params.scope,
+        params.queue,
+        params.action,
+        params.params,
+        params.scheduled_at,
+        opts
+      )
+    end
+  end
+
   defp all_locks(scope) do
     Lock |> Ecto.Query.where(scope: ^scope) |> TestRepo.all()
   end
