@@ -214,6 +214,11 @@ defmodule Queuetopia do
         Queuetopia.Queue.paginate_jobs(@repo, page_size, page_number, opts)
       end
 
+      @spec abort_job(Job.t(), error :: any) :: {:ok, any} | {:error, any}
+      def abort_job(%Job{} = job, error \\ nil) do
+        Queuetopia.Queue.abort_job(@repo, job, error)
+      end
+
       def handle_event(:new_incoming_job) do
         listen(:new_incoming_job)
       end

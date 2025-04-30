@@ -103,7 +103,7 @@ defmodule Queuetopia.Queue.Job do
   def aborted_job_changeset(%__MODULE__{} = job, attrs) when is_map(attrs) do
     job
     |> cast(attrs, [:ended_at, :error])
-    |> validate_required([:ended_at, :error])
+    |> validate_required([:ended_at])
     |> put_change(:end_status, "aborted")
   end
 

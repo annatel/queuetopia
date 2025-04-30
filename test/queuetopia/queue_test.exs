@@ -667,6 +667,40 @@ defmodule Queuetopia.QueueTest do
     end
   end
 
+  describe "abort_job/3" do
+    test "when aborts the ended job, returns error" do
+      job = insert!(:ended_job)
+
+      assert {:error, "already ended"} = Queue.abort_job(TestRepo, job)
+    end
+
+    test "when aborts the not ended job, aborts the job and record the ended_at and the end_status" do
+      job = insert!(:job)
+
+      assert {:ok, %Job{}} = Queue.abort_job(TestRepo, job)
+
+      %Job{} = job = TestRepo.reload(job)
+      refute is_nil(job.ended_at)
+      assert job.end_status == "aborted"
+    end
+
+    test "when aborts the locked not ended job, aborts the job and removes the lock" do
+      %Job{id: id, queue: queue, scope: scope} = job = insert!(:job, timeout: 1_000)
+
+      assert {:ok, %Job{id: ^id}} = Queue.fetch_job(TestRepo, job)
+
+      assert %Lock{} = TestRepo.get_by(Lock, scope: scope, queue: queue)
+
+      assert {:ok, %Job{end_status: "aborted"}} = Queue.abort_job(TestRepo, job)
+
+      assert is_nil(TestRepo.get_by(Lock, scope: scope, queue: queue))
+    end
+
+    test "when aborts the perfoming job, ..." do
+      # TODO
+    end
+  end
+
   defp all_locks(scope) do
     Lock |> Ecto.Query.where(scope: ^scope) |> TestRepo.all()
   end
