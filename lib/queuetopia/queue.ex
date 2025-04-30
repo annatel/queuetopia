@@ -108,7 +108,7 @@ defmodule Queuetopia.Queue do
   """
   @spec processable_now?(Job.t()) :: boolean
   def processable_now?(%Job{} = job) do
-    not done?(job) and not skipped?(job) and scheduled_for_now?(job)
+    not done?(job) and not max_attempts_reached?(job) and scheduled_for_now?(job)
   end
 
   @doc """
@@ -121,11 +121,11 @@ defmodule Queuetopia.Queue do
   end
 
   @doc """
-  Returns true if a job is skipped.
+  Returns true if max job attempts is reached.
   Otherwise, returns false.
   """
-  @spec skipped?(Job.t()) :: boolean
-  def skipped?(%Job{} = job) do
+  @spec max_attempts_reached?(Job.t()) :: boolean
+  def max_attempts_reached?(%Job{} = job) do
     job.attempts >= job.max_attempts
   end
 
@@ -223,12 +223,13 @@ defmodule Queuetopia.Queue do
       job = repo.get(Job, id)
 
       with {:done?, false} <- {:done?, done?(job)},
-           {:skipped?, false} <- {:skipped?, skipped?(job)},
+           {:max_attempts_reached?, false} <-
+             {:max_attempts_reached?, max_attempts_reached?(job)},
            {:scheduled_for_now?, true} <- {:scheduled_for_now?, scheduled_for_now?(job)} do
         {:ok, job}
       else
         {:done?, true} -> {:error, "already done"}
-        {:skipped?, true} -> {:error, "skipped"}
+        {:max_attempts_reached?, true} -> {:error, "max attempts reached"}
         {:scheduled_for_now?, false} -> {:error, "scheduled for later"}
       end
     end)

@@ -259,7 +259,8 @@ defmodule Queuetopia.SchedulerTest do
     test "a failed job will be retried" do
       scope = TestQueuetopia.scope()
 
-      %{id: failing_job_id, queue: queue} = insert!(:failure_job, scope: scope)
+      %{id: failing_job_id, queue: queue} =
+        insert!(:failure_job, scope: scope, max_attempts: 10000)
 
       start_supervised!(TestQueuetopia)
 

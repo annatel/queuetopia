@@ -43,7 +43,7 @@ defmodule Queuetopia.QueueTest do
       assert [] = Queue.list_available_pending_queues(TestRepo, scope_1)
     end
 
-    test "don't list queues whom jobs are skipped due to reaching the maximum number of attempts" do
+    test "don't list queues whom jobs reached the maximum number of attempts" do
       %{queue: _queue, scope: scope} =
         insert!(:job,
           scheduled_at: utc_now() |> add(-3600),
@@ -159,7 +159,7 @@ defmodule Queuetopia.QueueTest do
       assert is_nil(Queue.get_next_pending_job(TestRepo, scope, queue))
     end
 
-    test "when job skipped due to reaching the maximum number of attempts, returns nil" do
+    test "when max job attempts is reached, returns nil" do
       %Job{queue: queue, scope: scope} =
         insert!(:job, next_attempt_at: utc_now(), attempts: 20, max_attempts: 20)
 
@@ -195,10 +195,10 @@ defmodule Queuetopia.QueueTest do
       assert is_nil(TestRepo.get_by(Lock, scope: scope, queue: queue))
     end
 
-    test "when the job is skipped due to reaching the maximum number of attempts" do
+    test "when max job attempts is reached, returns error" do
       %{queue: queue, scope: scope} = job = insert!(:job, attempts: 20, max_attempts: 20)
 
-      assert {:error, "skipped"} = Queue.fetch_job(TestRepo, job)
+      assert {:error, "max attempts reached"} = Queue.fetch_job(TestRepo, job)
       assert is_nil(TestRepo.get_by(Lock, scope: scope, queue: queue))
     end
 
@@ -387,7 +387,11 @@ defmodule Queuetopia.QueueTest do
           next_attempt_at: next_attempt_at
         } = TestRepo.reload(job)
 
-        assert :eq = DateTime.compare(next_attempt_at, DateTime.add(attempted_at, backoff, :millisecond))
+        assert :eq =
+                 DateTime.compare(
+                   next_attempt_at,
+                   DateTime.add(attempted_at, backoff, :millisecond)
+                 )
       end)
     end
 
@@ -429,7 +433,11 @@ defmodule Queuetopia.QueueTest do
         next_attempt_at: next_attempt_at
       } = TestRepo.reload(job)
 
-      assert :eq = DateTime.compare(next_attempt_at, DateTime.add(attempted_at, max_backoff, :millisecond))
+      assert :eq =
+               DateTime.compare(
+                 next_attempt_at,
+                 DateTime.add(attempted_at, max_backoff, :millisecond)
+               )
 
       _ = Queue.persist_result!(TestRepo, job, {:error, "error"})
 
@@ -439,7 +447,11 @@ defmodule Queuetopia.QueueTest do
         next_attempt_at: next_attempt_at
       } = TestRepo.reload(job)
 
-      assert :eq = DateTime.compare(next_attempt_at, DateTime.add(attempted_at, max_backoff, :millisecond))
+      assert :eq =
+               DateTime.compare(
+                 next_attempt_at,
+                 DateTime.add(attempted_at, max_backoff, :millisecond)
+               )
     end
   end
 
@@ -454,7 +466,7 @@ defmodule Queuetopia.QueueTest do
       refute Queue.processable_now?(job)
     end
 
-    test "when the job is skipped due to reaching the maximum number of attempts" do
+    test "when max job attempts is reached, returns false" do
       job = insert!(:job, attempts: 10, max_attempts: 10)
       refute Queue.processable_now?(job)
     end
@@ -477,15 +489,15 @@ defmodule Queuetopia.QueueTest do
     end
   end
 
-  describe "skipped?/1" do
-    test "when the job is not skipped" do
+  describe "max_attempts_reached?/1" do
+    test "when the max job attempts is not reached, returns false" do
       job = insert!(:job)
-      refute Queue.skipped?(job)
+      refute Queue.max_attempts_reached?(job)
     end
 
-    test "when the maximum number of attempts reached" do
+    test "when the max job attempts is reached, returns true" do
       job = insert!(:job, attempts: 10, max_attempts: 10)
-      assert Queue.skipped?(job)
+      assert Queue.max_attempts_reached?(job)
     end
   end
 

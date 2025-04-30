@@ -75,10 +75,10 @@ defmodule Queuetopia.Test.AssertionsTest do
         )
 
       expected_attributes = %{queue: "queue", scope: job.scope}
+
       message =
         %ExUnit.AssertionError{
-          message:
-            "Expected 1 job with attributes #{inspect(expected_attributes)}, got 0."
+          message: "Expected 1 job with attributes #{inspect(expected_attributes)}, got 0."
         }
         |> ExUnit.AssertionError.message()
 
@@ -87,10 +87,10 @@ defmodule Queuetopia.Test.AssertionsTest do
       end
 
       expected_attributes = %{action: "action", scope: job.scope}
+
       message =
         %ExUnit.AssertionError{
-          message:
-            "Expected 1 job with attributes #{inspect(expected_attributes)}, got 0."
+          message: "Expected 1 job with attributes #{inspect(expected_attributes)}, got 0."
         }
         |> ExUnit.AssertionError.message()
 
@@ -107,10 +107,10 @@ defmodule Queuetopia.Test.AssertionsTest do
         )
 
       expected_attributes = %{params: %{"b" => 2}, scope: job.scope}
+
       message =
         %ExUnit.AssertionError{
-          message:
-            "Expected 1 job with attributes #{inspect(expected_attributes)}, got 0."
+          message: "Expected 1 job with attributes #{inspect(expected_attributes)}, got 0."
         }
         |> ExUnit.AssertionError.message()
 
@@ -132,10 +132,10 @@ defmodule Queuetopia.Test.AssertionsTest do
       )
 
       expected_attributes = %{params: %{"a" => 1}, scope: job.scope}
+
       message =
         %ExUnit.AssertionError{
-          message:
-            "Expected 1 job with attributes #{inspect(expected_attributes)}, got 2."
+          message: "Expected 1 job with attributes #{inspect(expected_attributes)}, got 2."
         }
         |> ExUnit.AssertionError.message()
 
@@ -174,10 +174,10 @@ defmodule Queuetopia.Test.AssertionsTest do
       job = insert!(:job, scope: Queuetopia.TestQueuetopia.scope(), params: %{"a" => 1})
 
       expected_attributes = %{queue: job.queue, scope: job.scope}
+
       message =
         %ExUnit.AssertionError{
-          message:
-            "Expected 0 job with attributes #{inspect(expected_attributes)}, got 1."
+          message: "Expected 0 job with attributes #{inspect(expected_attributes)}, got 1."
         }
         |> ExUnit.AssertionError.message()
 
@@ -186,10 +186,10 @@ defmodule Queuetopia.Test.AssertionsTest do
       end
 
       expected_attributes = %{action: job.action, scope: job.scope}
+
       message =
         %ExUnit.AssertionError{
-          message:
-            "Expected 0 job with attributes #{inspect(expected_attributes)}, got 1."
+          message: "Expected 0 job with attributes #{inspect(expected_attributes)}, got 1."
         }
         |> ExUnit.AssertionError.message()
 
@@ -198,10 +198,10 @@ defmodule Queuetopia.Test.AssertionsTest do
       end
 
       expected_attributes = %{params: job.params, scope: job.scope}
+
       message =
         %ExUnit.AssertionError{
-          message:
-            "Expected 0 job with attributes #{inspect(expected_attributes)}, got 1."
+          message: "Expected 0 job with attributes #{inspect(expected_attributes)}, got 1."
         }
         |> ExUnit.AssertionError.message()
 
