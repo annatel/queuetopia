@@ -244,7 +244,7 @@ defmodule Queuetopia.Queue do
   end
 
   @doc false
-  @spec persist_result!(module, Job.t(), {:error, any} | :ok | {:ok, any} | :abort) :: Job.t()
+  @spec persist_result!(module, Job.t(), {:error, any} | :ok | {:ok, any} | :aborted) :: Job.t()
 
   def persist_result!(repo, %Job{} = job, {:ok, _res}), do: persist_success!(repo, job)
   def persist_result!(repo, %Job{} = job, :ok), do: persist_success!(repo, job)
