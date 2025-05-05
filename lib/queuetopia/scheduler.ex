@@ -18,6 +18,10 @@ defmodule Queuetopia.Scheduler do
     end
   end
 
+  def abort_job(scheduler_pid, job) do
+    GenServer.call(scheduler_pid, {:abort, job})
+  end
+
   defp has_poll_messages?(scheduler_pid) do
     {:messages, messages} = Process.info(scheduler_pid, :messages)
 
@@ -66,30 +70,33 @@ defmodule Queuetopia.Scheduler do
     {:noreply, %{state | jobs: jobs}}
   end
 
+  @impl true
   def handle_info(
         {:DOWN, ref, :process, _pid, reason},
         %{jobs: jobs, repo: repo, scope: scope} = state
       ) do
-    job = Map.get(jobs, ref)
+    job = Map.get(jobs, ref)[:job]
     :ok = handle_task_result(repo, job, {:error, inspect(reason)})
 
     Queue.unlock_queue(repo, scope, job.queue)
     {:noreply, %{state | jobs: Map.delete(jobs, ref)}}
   end
 
-  def handle_info({:kill, task}, %{jobs: jobs, repo: repo} = state) do
+  @impl true
+  def handle_info({:timeout, task}, %{jobs: jobs, repo: repo} = state) do
     Task.shutdown(task, :brutal_kill)
 
-    job = Map.get(jobs, task.ref)
+    job = Map.get(jobs, task.ref)[:job]
     :ok = handle_task_result(repo, job, {:error, "job_timeout"})
 
     {:noreply, %{state | jobs: Map.delete(jobs, task.ref)}}
   end
 
+  @impl true
   def handle_info({ref, task_result}, %{jobs: jobs, repo: repo, scope: scope} = state) do
     Process.demonitor(ref, [:flush])
 
-    job = Map.get(jobs, ref)
+    job = Map.get(jobs, ref)[:job]
 
     :ok = handle_task_result(repo, job, task_result)
 
@@ -98,6 +105,21 @@ defmodule Queuetopia.Scheduler do
     send_poll(self())
 
     {:noreply, %{state | jobs: Map.delete(jobs, ref)}}
+  end
+
+  @impl true
+  def handle_call({:abort, %Job{} = job}, _from, %{jobs: jobs, repo: repo, scope: scope} = state) do
+    ref =
+      with {ref, %{job_task: task}} <- Enum.find(jobs, &(elem(&1, 1).job.id == job.id)) do
+        Task.shutdown(task, :brutal_kill)
+        ref
+      end
+
+    :ok = handle_task_result(repo, job, :aborted)
+
+    Queue.unlock_queue(repo, scope, job.queue)
+
+    {:reply, :ok, %{state | jobs: Map.delete(jobs, ref)}}
   end
 
   defp handle_task_result(repo, job, result) do
@@ -140,8 +162,8 @@ defmodule Queuetopia.Scheduler do
          {:ok, job} <- Queue.fetch_job(repo, job) do
       task = Task.Supervisor.async_nolink(task_supervisor_name, Queue, :perform, [job])
 
-      Process.send_after(self(), {:kill, task}, job.timeout)
-      {task.ref, job}
+      Process.send_after(self(), {:timeout, task}, job.timeout)
+      {task.ref, %{job: job, job_task: task}}
     else
       _ -> nil
     end

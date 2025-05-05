@@ -258,17 +258,13 @@ defmodule Queuetopia.Queue.JobTest do
     test "only permitted_keys are casted" do
       job = insert!(:job)
 
-      params =
-        params_for(:job,
-          ended_at: utc_now(),
-          error: "error"
-        )
+      params = params_for(:job, ended_at: utc_now())
 
-      changeset = Job.failed_job_changeset(job, Map.merge(params, %{new_key: "value"}))
+      changeset = Job.aborted_job_changeset(job, Map.merge(params, %{new_key: "value"}))
       changes_keys = changeset.changes |> Map.keys()
 
       assert :ended_at in changes_keys
-      assert :error in changes_keys
+      assert :end_status in changes_keys
       assert Enum.count(changes_keys) == 2
 
       refute :new_key in changes_keys
@@ -281,17 +277,20 @@ defmodule Queuetopia.Queue.JobTest do
 
       refute changeset.valid?
       assert %{ended_at: ["can't be blank"]} = errors_on(changeset)
-      assert %{error: ["can't be blank"]} = errors_on(changeset)
+    end
+
+    test "fills the end_status field by 'aborted'" do
+      job = insert!(:job)
+
+      changeset = Job.aborted_job_changeset(job, %{ended_at: utc_now()})
+
+      assert changeset.changes.end_status == "aborted"
     end
 
     test "when params are valid, return a valid changeset" do
       job = insert!(:job)
 
-      changeset =
-        Job.aborted_job_changeset(job, %{
-          ended_at: utc_now(),
-          error: "error"
-        })
+      changeset = Job.aborted_job_changeset(job, %{ended_at: utc_now()})
 
       assert changeset.valid?
     end

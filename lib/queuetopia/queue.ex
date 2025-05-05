@@ -102,28 +102,6 @@ defmodule Queuetopia.Queue do
     end)
   end
 
-  @spec abort_job(module, Job.t(), any) :: {:ok, any} | {:error, any}
-  def abort_job(repo, %Job{id: id} = job, error \\ nil) do
-    Ecto.Multi.new()
-    |> Ecto.Multi.run(:job, fn _, _ ->
-      job = repo.get(Job, id)
-
-      with {:ended?, false} <- {:ended?, ended?(job)} do
-        persist_abort(repo, job, error)
-      else
-        {:ended?, true} -> {:error, "already ended"}
-      end
-    end)
-    |> Ecto.Multi.run(:lock, fn _, _ ->
-      {:ok, unlock_queue(repo, job.scope, job.queue)}
-    end)
-    |> repo.transaction()
-    |> case do
-      {:ok, %{job: job}} -> {:ok, job}
-      {:error, :job, error, _} -> {:error, error}
-    end
-  end
-
   @doc """
   Returns true if a job scheduled date is reached and the job is not ended yet.
   Otherwise, returns false.
@@ -266,10 +244,13 @@ defmodule Queuetopia.Queue do
   end
 
   @doc false
-  @spec persist_result!(module, Job.t(), {:error, any} | :ok | {:ok, any}) :: Job.t()
+  @spec persist_result!(module, Job.t(), {:error, any} | :ok | {:ok, any} | :abort) :: Job.t()
 
   def persist_result!(repo, %Job{} = job, {:ok, _res}), do: persist_success!(repo, job)
   def persist_result!(repo, %Job{} = job, :ok), do: persist_success!(repo, job)
+
+  def persist_result!(repo, %Job{} = job, :aborted),
+    do: persist_abort!(repo, job)
 
   def persist_result!(repo, %Job{} = job, {:error, error}) when is_binary(error),
     do: persist_failure!(repo, job, error)
@@ -312,6 +293,16 @@ defmodule Queuetopia.Queue do
     |> tap(&performer.handle_failed_job!/1)
   end
 
+  defp persist_abort!(repo, %Job{} = job) do
+    utc_now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    job
+    |> Job.aborted_job_changeset(%{
+      ended_at: utc_now
+    })
+    |> repo.update!()
+  end
+
   defp persist_success!(repo, %Job{} = job) do
     utc_now = DateTime.utc_now() |> DateTime.truncate(:second)
 
@@ -323,17 +314,6 @@ defmodule Queuetopia.Queue do
       ended_at: utc_now
     })
     |> repo.update!()
-  end
-
-  defp persist_abort(repo, %Job{} = job, error) do
-    utc_now = DateTime.utc_now() |> DateTime.truncate(:second)
-
-    job
-    |> Job.aborted_job_changeset(%{
-      ended_at: utc_now,
-      error: error
-    })
-    |> repo.update()
   end
 
   defp resolve_performer(%Job{performer: performer}) do

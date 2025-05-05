@@ -71,7 +71,7 @@ defmodule Queuetopia.SchedulerTest do
       assert_receive {_, _, :started}, 50
       assert_receive {_, _, :started}, 50
       %{jobs: jobs} = :sys.get_state(TestQueuetopia.Scheduler)
-      job_ids = jobs |> Enum.map(fn {_, job} -> job.id end)
+      job_ids = jobs |> Enum.map(&elem(&1, 1)[:job].id)
       assert job_id_1 in job_ids
       assert job_id_2 in job_ids
 
@@ -79,14 +79,14 @@ defmodule Queuetopia.SchedulerTest do
 
       refute_receive {_, _, :started}, 30
       %{jobs: jobs} = :sys.get_state(TestQueuetopia.Scheduler)
-      job_ids = jobs |> Enum.map(fn {_, job} -> job.id end)
+      job_ids = jobs |> Enum.map(&elem(&1, 1)[:job].id)
       assert job_id_1 in job_ids
       assert job_id_2 in job_ids
 
       assert_receive {_, _, :ok}, 100
       assert_receive {_, _, :started}, 100
       %{jobs: jobs} = :sys.get_state(TestQueuetopia.Scheduler)
-      job_ids = jobs |> Enum.map(fn {_, job} -> job.id end)
+      job_ids = jobs |> Enum.map(&elem(&1, 1)[:job].id)
       assert job_id_1 in job_ids
       assert job_id_3 in job_ids
 
@@ -466,5 +466,48 @@ defmodule Queuetopia.SchedulerTest do
     assert messages |> Enum.filter(&(elem(&1, 0) == :poll)) |> length == 1
 
     :sys.get_state(TestQueuetopia.Scheduler)
+  end
+
+  describe "abort_job/2" do
+    test "when task for a job is not running, records the ended_at and end_status fields to the job" do
+      job = insert!(:job, scheduled_at: utc_now() |> DateTime.add(15, :second))
+
+      start_supervised!(TestQueuetopia)
+      scheduler_pid = Process.whereis(TestQueuetopia.Scheduler)
+
+      assert :ok = Queuetopia.Scheduler.abort_job(scheduler_pid, job)
+
+      job = TestRepo.get_by(Job, id: job.id)
+      refute is_nil(job.ended_at)
+      assert job.end_status == "aborted"
+    end
+
+    test "when task for a job is running, terminates the task and records the ended_at and end_status fields to the job" do
+      scope = TestQueuetopia.scope()
+
+      %Job{id: job_id, queue: queue} =
+        job =
+        insert!(:slow_job,
+          params: %{"duration" => 500},
+          timeout: 10_000,
+          scope: scope
+        )
+
+      start_supervised!(TestQueuetopia)
+      scheduler_pid = Process.whereis(TestQueuetopia.Scheduler)
+
+      assert_receive {^queue, ^job_id, :started}, 100
+      assert %Lock{} = TestRepo.get_by(Lock, queue: queue, scope: scope)
+
+      assert :ok = Queuetopia.Scheduler.abort_job(scheduler_pid, job)
+
+      job = TestRepo.get_by(Job, id: job.id)
+      refute is_nil(job.ended_at)
+      assert job.end_status == "aborted"
+
+      assert is_nil(TestRepo.get_by(Lock, queue: queue, scope: scope))
+
+      refute_receive {^queue, ^job_id, :ok}, 600
+    end
   end
 end
