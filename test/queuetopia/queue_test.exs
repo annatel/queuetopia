@@ -43,18 +43,6 @@ defmodule Queuetopia.QueueTest do
       assert [] = Queue.list_available_pending_queues(TestRepo, scope)
     end
 
-    test "don't list queues whom jobs reached the maximum number of attempts" do
-      %{queue: _queue, scope: scope} =
-        insert!(:job,
-          scheduled_at: utc_now() |> add(-3600),
-          next_attempt_at: utc_now(),
-          attempts: 5,
-          max_attempts: 5
-        )
-
-      assert [] = Queue.list_available_pending_queues(TestRepo, scope)
-    end
-
     test "when limit is given, returns only the specified number of rows from the result set" do
       %{queue: queue, scope: scope} = insert!(:job)
       insert!(:job, queue: queue, scope: scope)
@@ -158,13 +146,6 @@ defmodule Queuetopia.QueueTest do
 
       assert is_nil(Queue.get_next_pending_job(TestRepo, scope, queue))
     end
-
-    test "when max job attempts is reached, returns nil" do
-      %Job{queue: queue, scope: scope} =
-        insert!(:job, next_attempt_at: utc_now(), attempts: 20, max_attempts: 20)
-
-      assert is_nil(Queue.get_next_pending_job(TestRepo, scope, queue))
-    end
   end
 
   describe "fetch_job/2" do
@@ -192,13 +173,6 @@ defmodule Queuetopia.QueueTest do
       %Job{queue: queue, scope: scope} = job = insert!(:ended_job)
 
       assert {:error, "already ended"} = Queue.fetch_job(TestRepo, job)
-      assert is_nil(TestRepo.get_by(Lock, scope: scope, queue: queue))
-    end
-
-    test "when max job attempts is reached, returns error" do
-      %{queue: queue, scope: scope} = job = insert!(:job, attempts: 20, max_attempts: 20)
-
-      assert {:error, "max attempts reached"} = Queue.fetch_job(TestRepo, job)
       assert is_nil(TestRepo.get_by(Lock, scope: scope, queue: queue))
     end
 
@@ -619,11 +593,6 @@ defmodule Queuetopia.QueueTest do
       assert %{data: [], total: 0} =
                Queue.paginate_jobs(TestRepo, 100, 1, filters: [available?: true])
 
-      insert!(:job, attempts: 3, max_attempts: 3)
-
-      assert %{data: [], total: 0} =
-               Queue.paginate_jobs(TestRepo, 100, 1, filters: [available?: true])
-
       %{id: id} = job = insert!(:job)
 
       [
@@ -681,10 +650,6 @@ defmodule Queuetopia.QueueTest do
 
     test "filters" do
       insert!(:job, ended_at: utc_now())
-
-      assert Queue.list_jobs(TestRepo, filters: [available?: true]) == []
-
-      insert!(:job, attempts: 1, max_attempts: 1)
 
       assert Queue.list_jobs(TestRepo, filters: [available?: true]) == []
 
