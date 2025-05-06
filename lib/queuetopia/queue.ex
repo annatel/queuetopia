@@ -130,6 +130,15 @@ defmodule Queuetopia.Queue do
   end
 
   @doc """
+  Returns true if max job attempts is reached.
+  Otherwise, returns false.
+  """
+  @spec max_attempts_reached?(Job.t()) :: boolean
+  def max_attempts_reached?(%Job{} = job) do
+    job.attempts >= job.max_attempts
+  end
+
+  @doc """
   Returns true if a job scheduled date is reached.
   Otherwise, returns false.
   """
