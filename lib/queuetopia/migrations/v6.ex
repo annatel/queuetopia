@@ -14,21 +14,19 @@ defmodule Queuetopia.Migrations.V6 do
       add(:end_status, :string, null: true)
     end
 
-    set_end_status_to_success =
-      """
-      UPDATE queuetopia_jobs
-      SET end_status = 'success'
-      WHERE ended_at IS NOT NULL AND error IS NULL;
-      """
+    set_end_status_to_success = """
+    UPDATE queuetopia_jobs
+    SET end_status = 'success'
+    WHERE ended_at IS NOT NULL AND error IS NULL;
+    """
 
     execute(set_end_status_to_success)
 
-    set_end_status_to_max_attempts_reached =
-      """
-      UPDATE queuetopia_jobs
-      SET ended_at = attempted_at, end_status = 'max_attempts_reached'
-      WHERE ended_at IS NULL AND attempts >= max_attempts;
-      """
+    set_end_status_to_max_attempts_reached = """
+    UPDATE queuetopia_jobs
+    SET ended_at = attempted_at, end_status = 'max_attempts_reached'
+    WHERE ended_at IS NULL AND attempts >= max_attempts;
+    """
 
     execute(set_end_status_to_max_attempts_reached)
   end
