@@ -156,6 +156,26 @@ defmodule QueuetopiaTest do
     assert %{data: [], total: 2} = TestQueuetopia.paginate_jobs(1, 3)
   end
 
+  test "abort_job/1" do
+    scope = TestQueuetopia.scope()
+
+    %Job{id: job_id, queue: queue} =
+      job =
+      insert!(:slow_job,
+        params: %{"duration" => 500},
+        timeout: 10_000,
+        scope: scope
+      )
+
+    start_supervised!(TestQueuetopia)
+
+    assert_receive {^queue, ^job_id, :started}, 100
+
+    assert :ok = TestQueuetopia.abort_job(job)
+
+    refute_receive {^queue, ^job_id, :ok}, 600
+  end
+
   describe "handle_event/1" do
     test "sends a poll message to the scheduler" do
       Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 5_000)

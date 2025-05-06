@@ -2,7 +2,15 @@ defmodule Queuetopia.Queue.Job do
   @moduledoc false
 
   use Ecto.Schema
-  import Ecto.Changeset, only: [cast: 3, put_change: 3, validate_number: 3, validate_required: 2]
+
+  import Ecto.Changeset,
+    only: [
+      cast: 3,
+      put_change: 3,
+      validate_number: 3,
+      validate_required: 2,
+      validate_inclusion: 3
+    ]
 
   @type t :: %__MODULE__{}
   @type option ::
@@ -31,7 +39,8 @@ defmodule Queuetopia.Queue.Job do
     field(:attempted_at, :utc_datetime)
     field(:attempted_by, :string)
     field(:next_attempt_at, :utc_datetime)
-    field(:done_at, :utc_datetime)
+    field(:ended_at, :utc_datetime)
+    field(:end_status, :string)
     field(:error, :string)
 
     timestamps(type: :utc_datetime)
@@ -73,20 +82,38 @@ defmodule Queuetopia.Queue.Job do
     |> validate_number(:max_attempts, greater_than_or_equal_to: 0)
   end
 
-  @spec failed_job_changeset(Job.t(), map) :: Ecto.Changeset.t()
-  def failed_job_changeset(%__MODULE__{} = job, attrs) when is_map(attrs) do
+  @spec retry_job_changeset(Job.t(), map) :: Ecto.Changeset.t()
+  def retry_job_changeset(%__MODULE__{} = job, attrs) when is_map(attrs) do
     job
     |> cast(attrs, [:attempts, :attempted_at, :attempted_by, :next_attempt_at, :error])
     |> validate_required_attempt_attributes
     |> validate_required([:next_attempt_at, :error])
   end
 
+  @spec failed_job_changeset(Job.t(), map) :: Ecto.Changeset.t()
+  def failed_job_changeset(%__MODULE__{} = job, attrs) when is_map(attrs) do
+    job
+    |> cast(attrs, [:attempts, :attempted_at, :attempted_by, :ended_at, :end_status, :error])
+    |> validate_required_attempt_attributes
+    |> validate_required([:ended_at, :end_status, :error])
+    |> validate_inclusion(:end_status, ["failed", "max_attempts_reached"])
+  end
+
+  @spec aborted_job_changeset(Job.t(), map) :: Ecto.Changeset.t()
+  def aborted_job_changeset(%__MODULE__{} = job, attrs) when is_map(attrs) do
+    job
+    |> cast(attrs, [:ended_at])
+    |> validate_required([:ended_at])
+    |> put_change(:end_status, "aborted")
+  end
+
   @spec succeeded_job_changeset(Job.t(), map) :: Ecto.Changeset.t()
   def succeeded_job_changeset(%__MODULE__{} = job, attrs) when is_map(attrs) do
     job
-    |> cast(attrs, [:attempts, :attempted_at, :attempted_by, :done_at])
+    |> cast(attrs, [:attempts, :attempted_at, :attempted_by, :ended_at])
     |> validate_required_attempt_attributes
-    |> validate_required([:done_at])
+    |> validate_required([:ended_at])
+    |> put_change(:end_status, "success")
     |> put_change(:error, nil)
   end
 
