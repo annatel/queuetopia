@@ -41,8 +41,12 @@ defmodule Queuetopia do
 
   """
 
+  @callback next_value!() :: integer
+
   defmacro __using__(opts) do
     quote bind_quoted: [opts: opts] do
+      @behaviour Queuetopia
+
       use Supervisor
       alias Queuetopia.Queue.Job
 
@@ -142,6 +146,7 @@ defmodule Queuetopia do
             @repo,
             @performer,
             @scope,
+            &next_value!/0,
             queue,
             action,
             params,
@@ -181,6 +186,7 @@ defmodule Queuetopia do
           @repo,
           @performer,
           @scope,
+          &next_value!/0,
           queue,
           action,
           params,
@@ -234,6 +240,13 @@ defmodule Queuetopia do
       def repo(), do: @repo
       def performer(), do: @performer
       def scope(), do: @scope
+
+      @impl Queuetopia
+      def next_value!() do
+        repo() |> Queuetopia.Sequences.next_value!()
+      end
+
+      defoverridable next_value!: 0
 
       defp scheduler(), do: child_name("Scheduler")
       defp task_supervisor(), do: child_name("TaskSupervisor")

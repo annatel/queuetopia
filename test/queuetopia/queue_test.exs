@@ -238,6 +238,7 @@ defmodule Queuetopia.QueueTest do
                  TestRepo,
                  params.performer,
                  params.scope,
+                 fn -> Queuetopia.Sequences.next_value!(Queuetopia.TestRepo) end,
                  params.queue,
                  params.action,
                  params.params,
@@ -265,6 +266,7 @@ defmodule Queuetopia.QueueTest do
                  TestRepo,
                  params.performer,
                  params.scope,
+                 fn -> Queuetopia.Sequences.next_value!(Queuetopia.TestRepo) end,
                  params.queue,
                  params.action,
                  params.params,
@@ -277,7 +279,7 @@ defmodule Queuetopia.QueueTest do
     end
 
     test "with invalid params, returns a changeset error" do
-      assert {:error, changeset} = Queue.create_job(TestRepo, nil, nil, nil, nil, nil, utc_now())
+      assert {:error, changeset} = Queue.create_job(TestRepo, nil, nil, fn -> nil end, nil, nil, nil, utc_now())
 
       refute changeset.valid?
     end

@@ -1,6 +1,6 @@
 defmodule QueuetopiaTest do
   use Queuetopia.DataCase
-  alias Queuetopia.{TestQueuetopia, TestQueuetopia_2}
+  alias Queuetopia.{TestQueuetopia, TestQueuetopia_2, TestQueuetopia_RedefTest}
   alias Queuetopia.Queue.Job
 
   setup do
@@ -185,6 +185,18 @@ defmodule QueuetopiaTest do
     test "when the scheduler is down, returns an error tuple" do
       assert {:error, "Queuetopia.TestQueuetopia is down"} ==
                TestQueuetopia.handle_event(:new_incoming_job)
+    end
+  end
+
+  describe "next_value!/0" do
+    test "by default use internal function based on db sequence" do
+      TestRepo.update_all("queuetopia_sequences", set: [sequence: 41])
+
+      assert 42 = TestQueuetopia.next_value!()
+    end
+
+    test "can be redefined" do
+      assert 666 = TestQueuetopia_RedefTest.next_value!()
     end
   end
 end

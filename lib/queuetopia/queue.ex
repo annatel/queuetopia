@@ -4,7 +4,6 @@ defmodule Queuetopia.Queue do
   import Ecto.Query
 
   alias Ecto.Multi
-  alias Queuetopia.Sequences
   alias Queuetopia.Queue.{Job, Lock}
   alias Queuetopia.Queue.JobQueryable
 
@@ -63,6 +62,7 @@ defmodule Queuetopia.Queue do
           module,
           binary,
           binary,
+          function,
           binary,
           binary,
           map,
@@ -70,13 +70,14 @@ defmodule Queuetopia.Queue do
           [Job.option()]
         ) :: {:error, Ecto.Changeset.t()} | {:ok, Job.t()}
 
-  def create_job(repo, performer, scope, queue, action, params, scheduled_at, opts \\ []) do
+  def create_job(repo, performer, scope, next_value, queue, action, params, scheduled_at, opts \\ []) do
     options = Enum.into(opts, %{})
 
     %{
       scope: scope,
       queue: queue,
       performer: performer,
+      next_value: next_value,
       action: action,
       params: params,
       scheduled_at: scheduled_at
@@ -92,8 +93,8 @@ defmodule Queuetopia.Queue do
 
   defp create_job_multi(attrs) do
     Multi.new()
-    |> Multi.run(:sequence, fn repo, %{} ->
-      {:ok, Sequences.next_value!(:queuetopia_sequences, repo)}
+    |> Multi.run(:sequence, fn _repo, %{} ->
+      {:ok, attrs[:next_value].()}
     end)
     |> Multi.insert(:job, fn %{sequence: sequence} ->
       attrs
