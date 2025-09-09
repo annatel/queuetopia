@@ -15,7 +15,9 @@ defmodule Queuetopia.InMemorySequencesTest do
     end
 
     test "can be started with name" do
-      started_pid = start_supervised!({InMemorySequence, name: PwetPwet, repo: Queuetopia.TestRepo})
+      started_pid =
+        start_supervised!({InMemorySequence, name: PwetPwet, repo: Queuetopia.TestRepo})
+
       assert started_pid == Process.whereis(PwetPwet)
     end
 

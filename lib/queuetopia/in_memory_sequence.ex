@@ -6,7 +6,7 @@ defmodule Queuetopia.InMemorySequence do
   end
 
   def next_value!(process) do
-    Agent.get_and_update(process, &({&1, &1 + 1}))
+    Agent.get_and_update(process, &{&1, &1 + 1})
   end
 
   defp next_sequence(repo) do
