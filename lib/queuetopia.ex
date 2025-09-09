@@ -141,24 +141,24 @@ defmodule Queuetopia do
               {:error, Ecto.Changeset.t()} | {:ok, Job.t()}
       def create_job(queue, action, params, scheduled_at \\ DateTime.utc_now(), opts \\ [])
           when is_binary(queue) and is_binary(action) and is_map(params) do
-        result =
-          Queuetopia.Queue.create_job(
-            @repo,
-            @performer,
-            @scope,
-            &next_value!/0,
-            queue,
-            action,
-            params,
-            scheduled_at,
-            opts
-          )
+        attrs =
+          %{
+            scope: @scope,
+            queue: queue,
+            performer: @performer,
+            sequence: next_value!(),
+            action: action,
+            params: params,
+            scheduled_at: scheduled_at
+          }
+          |> Map.merge(Enum.into(opts, %{}))
 
-        with {:ok, %Job{}} <- result do
+        with result = {:ok, _} <- Queuetopia.Queue.create_job(attrs, @repo) do
           handle_event(:new_incoming_job)
+          result
+        else
+          error -> error
         end
-
-        result
       end
 
       @doc """
@@ -182,21 +182,9 @@ defmodule Queuetopia do
               Job.t()
       def create_job!(queue, action, params, scheduled_at \\ DateTime.utc_now(), opts \\ [])
           when is_binary(queue) and is_binary(action) and is_map(params) do
-        Queuetopia.Queue.create_job(
-          @repo,
-          @performer,
-          @scope,
-          &next_value!/0,
-          queue,
-          action,
-          params,
-          scheduled_at,
-          opts
-        )
+        create_job(queue, action, params, scheduled_at, opts)
         |> case do
           {:ok, %Job{} = job} ->
-            handle_event(:new_incoming_job)
-
             job
 
           {:error, %Ecto.Changeset{} = changeset} ->

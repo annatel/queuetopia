@@ -223,29 +223,25 @@ defmodule Queuetopia.QueueTest do
     end
   end
 
-  describe "create_job/8" do
+  describe "create_job/2" do
     test "with valid params, returns the created job" do
       params = params_for(:job)
 
-      opts = [
-        timeout: params.timeout,
-        max_backoff: params.max_backoff,
-        max_attempts: params.max_attempts
-      ]
+      attrs =
+        %{
+          performer: params.performer,
+          scope: params.scope,
+          sequence: params.sequence,
+          queue: params.queue,
+          action: params.action,
+          params: params.params,
+          scheduled_at: params.scheduled_at,
+          timeout: params.timeout,
+          max_backoff: params.max_backoff,
+          max_attempts: params.max_attempts
+        }
 
-      assert {:ok, %Job{} = job} =
-               Queue.create_job(
-                 TestRepo,
-                 params.performer,
-                 params.scope,
-                 fn -> Queuetopia.Sequences.next_value!(Queuetopia.TestRepo) end,
-                 params.queue,
-                 params.action,
-                 params.params,
-                 params.scheduled_at,
-                 opts
-               )
-
+      assert {:ok, %Job{} = job} = Queue.create_job(attrs, TestRepo)
       assert job.sequence >= 1
       assert job.scope == params.scope
       assert job.queue == params.queue
@@ -261,26 +257,36 @@ defmodule Queuetopia.QueueTest do
     test "when options are not set, creates the job with the default options" do
       params = params_for(:job)
 
-      assert {:ok, %Job{} = job} =
-               Queue.create_job(
-                 TestRepo,
-                 params.performer,
-                 params.scope,
-                 fn -> Queuetopia.Sequences.next_value!(Queuetopia.TestRepo) end,
-                 params.queue,
-                 params.action,
-                 params.params,
-                 params.scheduled_at
-               )
+      attrs =
+        %{
+          performer: params.performer,
+          scope: params.scope,
+          sequence: params.sequence,
+          queue: params.queue,
+          action: params.action,
+          params: params.params,
+          scheduled_at: params.scheduled_at
+        }
 
+      assert {:ok, %Job{} = job} = Queue.create_job(attrs, TestRepo)
       assert job.timeout == Job.default_timeout()
       assert job.max_backoff == Job.default_max_backoff()
       assert job.max_attempts == Job.default_max_attempts()
     end
 
     test "with invalid params, returns a changeset error" do
-      assert {:error, changeset} = Queue.create_job(TestRepo, nil, nil, fn -> nil end, nil, nil, nil, utc_now())
+      attrs =
+        %{
+          performer: nil,
+          scope: nil,
+          sequence: nil,
+          queue: nil,
+          action: nil,
+          params: nil,
+          scheduled_at: utc_now()
+        }
 
+      assert {:error, changeset} = Queue.create_job(attrs, TestRepo)
       refute changeset.valid?
     end
   end
