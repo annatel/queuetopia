@@ -8,7 +8,7 @@ defmodule Queuetopia.MixProject do
     [
       app: :queuetopia,
       version: version(),
-      elixir: "~> 1.12",
+      elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       package: package(),
       description: description(),
@@ -31,12 +31,11 @@ defmodule Queuetopia.MixProject do
 
   defp deps do
     [
-      {:ecto_sql, "~> 3.8"},
-      {:jason, "~> 1.2"},
+      {:ecto_sql, "~> 3.11"},
       {:myxql, ">= 0.0.0", only: :test},
       {:postgrex, ">= 0.0.0", only: :test},
-      {:antl_utils_ecto, "~> 2.4"},
-      {:ex_doc, "~> 0.24", only: :dev, runtime: false}
+      {:antl_utils_ecto, "~> 2.12"},
+      {:ex_doc, "~> 0.32", only: :dev, runtime: false}
     ]
   end
 

@@ -1,7 +1,7 @@
 VERSION 0.7
 
 elixir-base:
-    FROM elixir:1.12.2-alpine
+    FROM --platform=$BUILDPLATFORM elixir:1.18.4-otp-27-alpine
     WORKDIR /app
     RUN apk add --no-progress --update openssh-client git build-base
     RUN mix local.rebar --force && mix local.hex --force
@@ -21,7 +21,7 @@ lint:
     COPY .formatter.exs .
     RUN mix deps.unlock --check-unused
     RUN mix format --check-formatted
-    RUN mix compile --warnings-as-errors
+    RUN mix compile --force-compile --warnings-as-errors
 
 test:
     FROM earthly/dind:alpine
@@ -55,7 +55,7 @@ test:
             echo "waiting for mysql"; \
             sleep 1; \
         done;  \
-        
+
         # run test
 
         docker run \
