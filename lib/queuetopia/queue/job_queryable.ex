@@ -9,8 +9,7 @@ defmodule Queuetopia.Queue.JobQueryable do
 
   defp filter_by_field(queryable, {:available?, true}) do
     queryable
-    |> where([job], is_nil(job.done_at))
-    |> where([job], job.attempts < job.max_attempts)
+    |> where([job], is_nil(job.ended_at))
   end
 
   defp filter_by_field(_queryable, {key, _value}) when key not in @filterable_fields do

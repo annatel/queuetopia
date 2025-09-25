@@ -38,20 +38,8 @@ defmodule Queuetopia.QueueTest do
       assert [] = Queue.list_available_pending_queues(TestRepo, scope)
     end
 
-    test "don't list queues whom jobs are done" do
-      %{queue: _queue_1, scope: scope_1} = insert!(:done_job)
-      assert [] = Queue.list_available_pending_queues(TestRepo, scope_1)
-    end
-
-    test "don't list queues whom jobs reached the maximum number of attempts" do
-      %{queue: _queue, scope: scope} =
-        insert!(:job,
-          scheduled_at: utc_now() |> add(-3600),
-          next_attempt_at: utc_now(),
-          attempts: 5,
-          max_attempts: 5
-        )
-
+    test "don't list queues whom jobs are ended" do
+      %{queue: _queue, scope: scope} = insert!(:ended_job)
       assert [] = Queue.list_available_pending_queues(TestRepo, scope)
     end
 
@@ -89,7 +77,7 @@ defmodule Queuetopia.QueueTest do
 
   describe "get_next_pending_job/2" do
     test "returns the next pending job for a given scoped queue" do
-      %{queue: queue_1, scope: scope_1} = insert!(:done_job)
+      %{queue: queue_1, scope: scope_1} = insert!(:ended_job)
       %{id: id_1} = insert!(:job, queue: queue_1, scope: scope_1)
 
       %{id: id_2, queue: queue_2} = insert!(:job, scope: scope_1)
@@ -158,13 +146,6 @@ defmodule Queuetopia.QueueTest do
 
       assert is_nil(Queue.get_next_pending_job(TestRepo, scope, queue))
     end
-
-    test "when max job attempts is reached, returns nil" do
-      %Job{queue: queue, scope: scope} =
-        insert!(:job, next_attempt_at: utc_now(), attempts: 20, max_attempts: 20)
-
-      assert is_nil(Queue.get_next_pending_job(TestRepo, scope, queue))
-    end
   end
 
   describe "fetch_job/2" do
@@ -188,17 +169,10 @@ defmodule Queuetopia.QueueTest do
       assert %Lock{id: ^id} = TestRepo.get_by(Lock, scope: scope, queue: queue)
     end
 
-    test "when the job is done" do
-      %Job{queue: queue, scope: scope} = job = insert!(:done_job)
+    test "when the job is ended" do
+      %Job{queue: queue, scope: scope} = job = insert!(:ended_job)
 
-      assert {:error, "already done"} = Queue.fetch_job(TestRepo, job)
-      assert is_nil(TestRepo.get_by(Lock, scope: scope, queue: queue))
-    end
-
-    test "when max job attempts is reached, returns error" do
-      %{queue: queue, scope: scope} = job = insert!(:job, attempts: 20, max_attempts: 20)
-
-      assert {:error, "max attempts reached"} = Queue.fetch_job(TestRepo, job)
+      assert {:error, "already ended"} = Queue.fetch_job(TestRepo, job)
       assert is_nil(TestRepo.get_by(Lock, scope: scope, queue: queue))
     end
 
@@ -303,17 +277,19 @@ defmodule Queuetopia.QueueTest do
       _ = Queue.persist_result!(TestRepo, job, :ok)
 
       %Job{
-        done_at: done_at,
+        ended_at: ended_at,
+        end_status: end_status,
         attempted_at: attempted_at,
         attempted_by: attempted_by,
         attempts: attempts
       } = TestRepo.reload(job)
 
-      refute is_nil(done_at)
       refute is_nil(attempted_at)
+      refute is_nil(ended_at)
+      assert end_status == "success"
       assert attempted_by == Atom.to_string(Node.self())
       assert attempts == 1
-      assert done_at == attempted_at
+      assert ended_at == attempted_at
     end
 
     test "when a job succeeded with a result, persists the job as succeeded" do
@@ -322,43 +298,71 @@ defmodule Queuetopia.QueueTest do
       _ = Queue.persist_result!(TestRepo, job, {:ok, :done})
 
       %Job{
-        done_at: done_at,
+        ended_at: ended_at,
+        end_status: end_status,
         attempted_at: attempted_at,
         attempted_by: attempted_by,
         attempts: attempts
       } = TestRepo.reload(job)
 
-      refute is_nil(done_at)
       refute is_nil(attempted_at)
+      refute is_nil(ended_at)
+      assert end_status == "success"
       assert attempted_by == Atom.to_string(Node.self())
       assert attempts == 1
-      assert done_at == attempted_at
+      assert ended_at == attempted_at
     end
 
-    test "when a job failed, persists the job as failed and record the error" do
+    test "when a job failed and max_attempts is not reached, persists the job and record the error and next_attempt_at" do
       job = insert!(:failure_job)
 
       _ = Queue.persist_result!(TestRepo, job, {:error, "error"})
 
       %Job{} = job = TestRepo.reload(job)
-      assert job.done_at == nil
-      refute job.attempted_at == nil
+      refute is_nil(job.attempted_at)
+      refute is_nil(job.next_attempt_at)
+      assert is_nil(job.ended_at)
       assert job.attempted_by == Atom.to_string(Node.self())
       assert job.attempts == 1
       assert job.error == "error"
     end
 
-    test "when a job returns an unexpected_response, persists the job as failed and record the response" do
+    test "when a job failed and max_attempts is reached, persists the job as failed and record the error" do
+      job = insert!(:failure_job, attempts: 9, max_attempts: 10)
+
+      _ = Queue.persist_result!(TestRepo, job, {:error, "error"})
+
+      %Job{} = job = TestRepo.reload(job)
+      refute is_nil(job.ended_at)
+      refute is_nil(job.attempted_at)
+      assert job.attempted_by == Atom.to_string(Node.self())
+      assert job.attempts == 10
+      assert job.error == "error"
+      assert job.end_status == "max_attempts_reached"
+    end
+
+    test "when a job returns an unexpected_response, persists the job and record the error and the response" do
       job = insert!(:failure_job)
 
       _ = Queue.persist_result!(TestRepo, job, "unexpected_response")
 
       %Job{} = job = TestRepo.reload(job)
-      assert job.done_at == nil
-      refute job.attempted_at == nil
+      refute is_nil(job.attempted_at)
+      refute is_nil(job.next_attempt_at)
+      assert is_nil(job.ended_at)
       assert job.attempted_by == Atom.to_string(Node.self())
       assert job.attempts == 1
       assert job.error == "\"unexpected_response\""
+    end
+
+    test "when a job aborted, persists the job as aborted and record the ended_at and end_status" do
+      job = insert!(:job)
+
+      _ = Queue.persist_result!(TestRepo, job, :aborted)
+
+      %Job{} = job = TestRepo.reload(job)
+      refute is_nil(job.ended_at)
+      assert job.end_status == "aborted"
     end
 
     test "when handle_failed_job/1 is defined by the performer" do
@@ -371,12 +375,12 @@ defmodule Queuetopia.QueueTest do
       _ = Queue.persist_result!(TestRepo, job, {:error, "error"})
 
       %Job{} = job = TestRepo.reload(job)
-      assert job.done_at == nil
+      assert job.ended_at == nil
       refute job.attempted_at == nil
       assert job.attempted_by == Atom.to_string(Node.self())
       assert job.attempts == 1
 
-      assert_receive {:job, %Job{id: ^id, done_at: nil, attempted_at: %DateTime{}, attempts: 1}},
+      assert_receive {:job, %Job{id: ^id, ended_at: nil, attempted_at: %DateTime{}, attempts: 1}},
                      100
     end
 
@@ -390,7 +394,7 @@ defmodule Queuetopia.QueueTest do
         Queue.persist_result!(TestRepo, job, {:error, "error"})
 
         %Job{
-          done_at: nil,
+          ended_at: nil,
           attempted_at: attempted_at,
           next_attempt_at: next_attempt_at
         } = TestRepo.reload(job)
@@ -436,7 +440,7 @@ defmodule Queuetopia.QueueTest do
       _ = Queue.persist_result!(TestRepo, job, {:error, "error"})
 
       %Job{
-        done_at: nil,
+        ended_at: nil,
         attempted_at: attempted_at,
         next_attempt_at: next_attempt_at
       } = TestRepo.reload(job)
@@ -450,7 +454,7 @@ defmodule Queuetopia.QueueTest do
       _ = Queue.persist_result!(TestRepo, job, {:error, "error"})
 
       %Job{
-        done_at: nil,
+        ended_at: nil,
         attempted_at: attempted_at,
         next_attempt_at: next_attempt_at
       } = TestRepo.reload(job)
@@ -464,23 +468,18 @@ defmodule Queuetopia.QueueTest do
   end
 
   describe "processable_now?/1" do
-    test "when the job is processable now" do
+    test "when the job is not ended and processable now" do
       job = insert!(:job)
       assert Queue.processable_now?(job)
     end
 
-    test "when the job is done" do
-      job = insert!(:done_job)
-      refute Queue.processable_now?(job)
-    end
-
-    test "when max job attempts is reached, returns false" do
-      job = insert!(:job, attempts: 10, max_attempts: 10)
-      refute Queue.processable_now?(job)
-    end
-
-    test "when the job is scheduled for later" do
+    test "when the job is not ended and scheduled for later" do
       job = insert!(:job, scheduled_at: utc_now() |> add(3600, :second))
+      refute Queue.processable_now?(job)
+    end
+
+    test "when the job is ended" do
+      job = insert!(:ended_job)
       refute Queue.processable_now?(job)
     end
   end
@@ -489,11 +488,28 @@ defmodule Queuetopia.QueueTest do
     test "when the job is not done" do
       job = insert!(:job)
       refute Queue.done?(job)
+      assert is_nil(job.ended_at)
     end
 
     test "when the job is done" do
       job = insert!(:done_job)
       assert Queue.done?(job)
+      refute is_nil(job.ended_at)
+      assert job.end_status == "success"
+    end
+  end
+
+  describe "ended?/1" do
+    test "when the job is not ended" do
+      job = insert!(:job)
+      refute Queue.ended?(job)
+      assert is_nil(job.ended_at)
+    end
+
+    test "when the job is done" do
+      job = insert!(:ended_job)
+      assert Queue.ended?(job)
+      refute is_nil(job.ended_at)
     end
   end
 
@@ -580,12 +596,7 @@ defmodule Queuetopia.QueueTest do
     end
 
     test "filters" do
-      insert!(:job, done_at: utc_now())
-
-      assert %{data: [], total: 0} =
-               Queue.paginate_jobs(TestRepo, 100, 1, filters: [available?: true])
-
-      insert!(:job, attempts: 3, max_attempts: 3)
+      insert!(:job, ended_at: utc_now())
 
       assert %{data: [], total: 0} =
                Queue.paginate_jobs(TestRepo, 100, 1, filters: [available?: true])
@@ -646,11 +657,7 @@ defmodule Queuetopia.QueueTest do
     end
 
     test "filters" do
-      insert!(:job, done_at: utc_now())
-
-      assert Queue.list_jobs(TestRepo, filters: [available?: true]) == []
-
-      insert!(:job, attempts: 1, max_attempts: 1)
+      insert!(:job, ended_at: utc_now())
 
       assert Queue.list_jobs(TestRepo, filters: [available?: true]) == []
 

@@ -208,6 +208,17 @@ defmodule Queuetopia do
         Queuetopia.Queue.paginate_jobs(@repo, page_size, page_number, opts)
       end
 
+      @spec abort_job(Job.t()) :: :ok | {:error, any}
+      def abort_job(%Job{} = job) do
+        scheduler_pid = Process.whereis(scheduler())
+
+        if is_pid(scheduler_pid) do
+          Queuetopia.Scheduler.abort_job(scheduler_pid, job)
+        else
+          {:error, "#{inspect(__MODULE__)} is down"}
+        end
+      end
+
       def handle_event(:new_incoming_job) do
         listen(:new_incoming_job)
       end

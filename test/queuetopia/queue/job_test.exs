@@ -123,7 +123,7 @@ defmodule Queuetopia.Queue.JobTest do
     end
   end
 
-  describe "failed_job_changeset/2" do
+  describe "retry_job_changeset/2" do
     test "only permitted_keys are casted" do
       job = insert!(:job)
 
@@ -136,7 +136,7 @@ defmodule Queuetopia.Queue.JobTest do
           error: "error"
         )
 
-      changeset = Job.failed_job_changeset(job, Map.merge(params, %{new_key: "value"}))
+      changeset = Job.retry_job_changeset(job, Map.merge(params, %{new_key: "value"}))
       changes_keys = changeset.changes |> Map.keys()
 
       assert :attempts in changes_keys
@@ -152,7 +152,7 @@ defmodule Queuetopia.Queue.JobTest do
     test "when required params are missing, returns an invalid changeset" do
       job = insert!(:job)
 
-      changeset = Job.failed_job_changeset(job, %{attempts: nil, scheduled_at: nil})
+      changeset = Job.retry_job_changeset(job, %{attempts: nil, scheduled_at: nil})
 
       refute changeset.valid?
       assert %{attempts: ["can't be blank"]} = errors_on(changeset)
@@ -167,13 +167,130 @@ defmodule Queuetopia.Queue.JobTest do
       job = insert!(:job)
 
       changeset =
-        Job.failed_job_changeset(job, %{
+        Job.retry_job_changeset(job, %{
           attempts: 1,
           attempted_at: utc_now,
           attempted_by: Atom.to_string(Node.self()),
           next_attempt_at: utc_now,
           error: "error"
         })
+
+      assert changeset.valid?
+    end
+  end
+
+  describe "failed_job_changeset/2" do
+    test "only permitted_keys are casted" do
+      job = insert!(:job)
+
+      params =
+        params_for(:job,
+          attempts: 6,
+          attempted_at: utc_now(),
+          attempted_by: Atom.to_string(Node.self()),
+          ended_at: utc_now(),
+          end_status: "failed",
+          error: "error"
+        )
+
+      changeset = Job.failed_job_changeset(job, Map.merge(params, %{new_key: "value"}))
+      changes_keys = changeset.changes |> Map.keys()
+
+      assert :attempts in changes_keys
+      assert :attempted_at in changes_keys
+      assert :attempted_by in changes_keys
+      assert :ended_at in changes_keys
+      assert :end_status in changes_keys
+      assert :error in changes_keys
+      assert Enum.count(changes_keys) == 6
+
+      refute :new_key in changes_keys
+    end
+
+    test "when required params are missing, returns an invalid changeset" do
+      job = insert!(:job)
+
+      changeset = Job.failed_job_changeset(job, %{attempts: nil, scheduled_at: nil})
+
+      refute changeset.valid?
+      assert %{attempts: ["can't be blank"]} = errors_on(changeset)
+      assert %{attempted_at: ["can't be blank"]} = errors_on(changeset)
+      assert %{attempted_by: ["can't be blank"]} = errors_on(changeset)
+      assert %{ended_at: ["can't be blank"]} = errors_on(changeset)
+      assert %{error: ["can't be blank"]} = errors_on(changeset)
+    end
+
+    test "when invalid end_status is given, returns an invalid changeset" do
+      job = insert!(:job)
+
+      changeset =
+        Job.failed_job_changeset(job, %{
+          attempts: 1,
+          attempted_at: utc_now(),
+          attempted_by: Atom.to_string(Node.self()),
+          ended_at: utc_now(),
+          end_status: "some_unsupported_invalid_status",
+          error: "error"
+        })
+
+      refute changeset.valid?
+      assert %{end_status: ["is invalid"]} = errors_on(changeset)
+    end
+
+    test "when params are valid, return a valid changeset" do
+      job = insert!(:job)
+
+      changeset =
+        Job.failed_job_changeset(job, %{
+          attempts: 1,
+          attempted_at: utc_now(),
+          attempted_by: Atom.to_string(Node.self()),
+          ended_at: utc_now(),
+          end_status: "failed",
+          error: "error"
+        })
+
+      assert changeset.valid?
+    end
+  end
+
+  describe "aborted_job_changeset/2" do
+    test "only permitted_keys are casted" do
+      job = insert!(:job)
+
+      params = params_for(:job, ended_at: utc_now())
+
+      changeset = Job.aborted_job_changeset(job, Map.merge(params, %{new_key: "value"}))
+      changes_keys = changeset.changes |> Map.keys()
+
+      assert :ended_at in changes_keys
+      assert :end_status in changes_keys
+      assert Enum.count(changes_keys) == 2
+
+      refute :new_key in changes_keys
+    end
+
+    test "when required params are missing, returns an invalid changeset" do
+      job = insert!(:job)
+
+      changeset = Job.aborted_job_changeset(job, %{attempts: nil, scheduled_at: nil})
+
+      refute changeset.valid?
+      assert %{ended_at: ["can't be blank"]} = errors_on(changeset)
+    end
+
+    test "fills the end_status field by 'aborted'" do
+      job = insert!(:job)
+
+      changeset = Job.aborted_job_changeset(job, %{ended_at: utc_now()})
+
+      assert changeset.changes.end_status == "aborted"
+    end
+
+    test "when params are valid, return a valid changeset" do
+      job = insert!(:job)
+
+      changeset = Job.aborted_job_changeset(job, %{ended_at: utc_now()})
 
       assert changeset.valid?
     end
@@ -188,7 +305,7 @@ defmodule Queuetopia.Queue.JobTest do
           attempts: 6,
           attempted_at: utc_now(),
           attempted_by: Atom.to_string(Node.self()),
-          done_at: utc_now()
+          ended_at: utc_now()
         )
 
       changeset = Job.succeeded_job_changeset(job, Map.merge(params, %{new_key: "value"}))
@@ -197,8 +314,9 @@ defmodule Queuetopia.Queue.JobTest do
       assert :attempts in changes_keys
       assert :attempted_at in changes_keys
       assert :attempted_by in changes_keys
-      assert :done_at in changes_keys
-      assert Enum.count(changes_keys) == 4
+      assert :ended_at in changes_keys
+      assert :end_status in changes_keys
+      assert Enum.count(changes_keys) == 5
 
       refute :new_key in changes_keys
     end
@@ -211,7 +329,7 @@ defmodule Queuetopia.Queue.JobTest do
       assert %{attempts: ["can't be blank"]} = errors_on(changeset)
       assert %{attempted_at: ["can't be blank"]} = errors_on(changeset)
       assert %{attempted_by: ["can't be blank"]} = errors_on(changeset)
-      assert %{done_at: ["can't be blank"]} = errors_on(changeset)
+      assert %{ended_at: ["can't be blank"]} = errors_on(changeset)
     end
 
     test "nillifies error field" do
@@ -222,12 +340,28 @@ defmodule Queuetopia.Queue.JobTest do
           attempts: 6,
           attempted_at: utc_now(),
           attempted_by: Atom.to_string(Node.self()),
-          done_at: utc_now()
+          ended_at: utc_now()
         )
 
       changeset = Job.succeeded_job_changeset(job, params)
 
       assert is_nil(changeset.changes.error)
+    end
+
+    test "fills the end_status field by 'success'" do
+      job = insert!(:job)
+
+      params =
+        params_for(:job,
+          attempts: 6,
+          attempted_at: utc_now(),
+          attempted_by: Atom.to_string(Node.self()),
+          ended_at: utc_now()
+        )
+
+      changeset = Job.succeeded_job_changeset(job, params)
+
+      assert changeset.changes.end_status == "success"
     end
 
     test "when params are valid, return a valid changeset" do
@@ -239,7 +373,7 @@ defmodule Queuetopia.Queue.JobTest do
           attempts: 1,
           attempted_at: utc_now,
           attempted_by: Atom.to_string(Node.self()),
-          done_at: utc_now
+          ended_at: utc_now
         })
 
       assert changeset.valid?
