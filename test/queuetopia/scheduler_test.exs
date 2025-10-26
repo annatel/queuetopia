@@ -414,6 +414,90 @@ defmodule Queuetopia.SchedulerTest do
 
       :sys.get_state(TestQueuetopia.Scheduler)
     end
+
+    test "when performer throws an error on handle_failed jobs, persists the error" do
+      job =
+        insert!(:failure_job,
+          scope: TestQueuetopia.scope(),
+          performer: Queuetopia.TestPerfomerThrowingInHandleFailedJob |> to_string()
+        )
+
+      start_supervised!(TestQueuetopia)
+
+      assert_receive {_, _, :fail}, 300
+
+      :sys.get_state(TestQueuetopia.Scheduler)
+
+      assert %{error: error} = Queuetopia.TestRepo.reload(job)
+
+      assert error ==
+               "Handle_failed_job error:\"throw_error_in_handle_failed_job\" Job error:{:error, \"error\"}"
+
+      :sys.get_state(TestQueuetopia.Scheduler)
+    end
+
+    test "when performer raises an error on handle_failed jobs, persists the error" do
+      job =
+        insert!(:failure_job,
+          scope: TestQueuetopia.scope(),
+          performer: Queuetopia.TestPerfomerRaisingInHandleFailedJob |> to_string()
+        )
+
+      start_supervised!(TestQueuetopia)
+
+      assert_receive {_, _, :fail}, 200
+
+      :sys.get_state(TestQueuetopia.Scheduler)
+
+      assert %{error: error} = Queuetopia.TestRepo.reload(job)
+
+      assert error ==
+               "Handle_failed_job error:raise_error_in_handle_failed_job Job error:{:error, \"error\"}"
+
+      :sys.get_state(TestQueuetopia.Scheduler)
+    end
+
+    test "when performer exits an error on handle_failed jobs, persists the error" do
+      job =
+        insert!(:failure_job,
+          scope: TestQueuetopia.scope(),
+          performer: Queuetopia.TestPerfomerExitingInHandleFailedJob |> to_string()
+        )
+
+      start_supervised!(TestQueuetopia)
+
+      assert_receive {_, _, :fail}, 200
+
+      :sys.get_state(TestQueuetopia.Scheduler)
+
+      assert %{error: error} = Queuetopia.TestRepo.reload(job)
+
+      assert error ==
+               "Handle_failed_job error:\"exit_error_in_handle_failed_job\" Job error:{:error, \"error\"}"
+
+      :sys.get_state(TestQueuetopia.Scheduler)
+    end
+
+    test "when performer send error an error on handle_failed jobs, persists the error" do
+      job =
+        insert!(:failure_job,
+          scope: TestQueuetopia.scope(),
+          performer: Queuetopia.TestPerfomerErroringInHandleFailedJob |> to_string()
+        )
+
+      start_supervised!(TestQueuetopia)
+
+      assert_receive {_, _, :fail}, 200
+
+      :sys.get_state(TestQueuetopia.Scheduler)
+
+      assert %{error: error} = Queuetopia.TestRepo.reload(job)
+
+      assert error ==
+               "Handle_failed_job error:Erlang error: \"test error pour catch\" Job error:{:error, \"error\"}"
+
+      :sys.get_state(TestQueuetopia.Scheduler)
+    end
   end
 
   describe "repolls after job performed?:" do
