@@ -3,13 +3,10 @@ defmodule Queuetopia.TestPerfomer do
   import Queuetopia.Factory
   alias Queuetopia.Queue.Job
 
-  @performer Queuetopia.TestPerfomer |> to_string()
-
   @impl true
 
   def perform(
         %Job{
-          performer: @performer,
           queue: queue,
           action: action,
           params: %{"bin_pid" => bin_pid},
@@ -78,5 +75,69 @@ defmodule Queuetopia.TestPerfomerWithHandleFailedJob do
   def handle_failed_job!(%Job{} = job) do
     send(self(), {:job, job})
     :ok
+  end
+end
+
+defmodule Queuetopia.TestPerfomerThrowingInHandleFailedJob do
+  use Queuetopia.Performer
+
+  alias Queuetopia.Queue.Job
+
+  @impl true
+  def perform(%Job{} = job) do
+    Queuetopia.TestPerfomer.perform(job)
+  end
+
+  @impl true
+  def handle_failed_job!(%Job{}) do
+    throw("throw_error_in_handle_failed_job")
+  end
+end
+
+defmodule Queuetopia.TestPerfomerRaisingInHandleFailedJob do
+  use Queuetopia.Performer
+
+  alias Queuetopia.Queue.Job
+
+  @impl true
+  def perform(%Job{} = job) do
+    Queuetopia.TestPerfomer.perform(job)
+  end
+
+  @impl true
+  def handle_failed_job!(%Job{}) do
+    raise("raise_error_in_handle_failed_job")
+  end
+end
+
+defmodule Queuetopia.TestPerfomerErroringInHandleFailedJob do
+  use Queuetopia.Performer
+
+  alias Queuetopia.Queue.Job
+
+  @impl true
+  def perform(%Job{} = job) do
+    Queuetopia.TestPerfomer.perform(job)
+  end
+
+  @impl true
+  def handle_failed_job!(%Job{}) do
+    :erlang.error("test error pour catch")
+  end
+end
+
+defmodule Queuetopia.TestPerfomerExitingInHandleFailedJob do
+  use Queuetopia.Performer
+
+  alias Queuetopia.Queue.Job
+
+  @impl true
+  def perform(%Job{} = job) do
+    Queuetopia.TestPerfomer.perform(job)
+  end
+
+  @impl true
+  def handle_failed_job!(%Job{}) do
+    exit("exit_error_in_handle_failed_job")
   end
 end

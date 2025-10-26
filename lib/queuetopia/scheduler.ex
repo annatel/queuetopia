@@ -90,7 +90,6 @@ defmodule Queuetopia.Scheduler do
     Process.demonitor(ref, [:flush])
 
     job = Map.get(jobs, ref)
-
     :ok = handle_task_result(repo, job, task_result)
 
     Queue.unlock_queue(repo, scope, job.queue)
@@ -102,10 +101,33 @@ defmodule Queuetopia.Scheduler do
 
   defp handle_task_result(repo, job, result) do
     unless is_nil(job) do
-      Queue.persist_result!(repo, job, result)
+      safe_persist_result(repo, job, result)
     end
 
     :ok
+  end
+
+  defp safe_persist_result(repo, job, result) do
+    with {:error, error} <-
+           (try do
+              Queue.persist_result!(repo, job, result)
+            rescue
+              exception ->
+                IO.inspect(exception)
+                {:error, Exception.message(exception)} |> IO.inspect(label: "eeeeeeeeeeeee")
+            catch
+              :throw, reason ->
+                {:error, "#{inspect(reason)}"}
+
+              :exit, reason ->
+                {:error, "#{inspect(reason)}"}
+            end) do
+      job
+      |> Ecto.Changeset.change(
+        error: "Handle_failed_job error:" <> error <> " Job error:" <> inspect(result)
+      )
+      |> repo.update!()
+    end
   end
 
   defp poll_queues(task_supervisor_name, poll_interval, repo, scope, jobs, opts) do
