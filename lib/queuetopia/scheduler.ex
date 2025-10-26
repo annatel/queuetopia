@@ -113,8 +113,7 @@ defmodule Queuetopia.Scheduler do
               Queue.persist_result!(repo, job, result)
             rescue
               exception ->
-                IO.inspect(exception)
-                {:error, Exception.message(exception)} |> IO.inspect(label: "eeeeeeeeeeeee")
+                {:error, Exception.message(exception)}
             catch
               :throw, reason ->
                 {:error, "#{inspect(reason)}"}
