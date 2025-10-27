@@ -500,6 +500,20 @@ defmodule Queuetopia.SchedulerTest do
     end
   end
 
+  test "persist done_at for a success job" do
+    scope = TestQueuetopia.scope()
+
+    job = insert!(:job, scope: scope, action: "success")
+
+    start_supervised!(TestQueuetopia)
+
+    assert_receive {_, _, :ok}, 100
+    :sys.get_state(TestQueuetopia.Scheduler)
+
+    assert %{done_at: %DateTime{}} = Queuetopia.TestRepo.reload(job)
+    :sys.get_state(TestQueuetopia.Scheduler)
+  end
+
   describe "repolls after job performed?:" do
     test "after a job succeeded" do
       scope = TestQueuetopia.scope()
