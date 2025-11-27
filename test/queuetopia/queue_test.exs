@@ -227,19 +227,18 @@ defmodule Queuetopia.QueueTest do
     test "with valid params, returns the created job" do
       params = params_for(:job)
 
-      attrs =
-        %{
-          performer: params.performer,
-          scope: params.scope,
-          sequence: params.sequence,
-          queue: params.queue,
-          action: params.action,
-          params: params.params,
-          scheduled_at: params.scheduled_at,
-          timeout: params.timeout,
-          max_backoff: params.max_backoff,
-          max_attempts: params.max_attempts
-        }
+      attrs = %{
+        performer: params.performer,
+        scope: params.scope,
+        sequence: params.sequence,
+        queue: params.queue,
+        action: params.action,
+        params: params.params,
+        scheduled_at: params.scheduled_at,
+        timeout: params.timeout,
+        max_backoff: params.max_backoff,
+        max_attempts: params.max_attempts
+      }
 
       assert {:ok, %Job{} = job} = Queue.create_job(attrs, TestRepo)
       assert job.sequence >= 1
@@ -257,16 +256,15 @@ defmodule Queuetopia.QueueTest do
     test "when options are not set, creates the job with the default options" do
       params = params_for(:job)
 
-      attrs =
-        %{
-          performer: params.performer,
-          scope: params.scope,
-          sequence: params.sequence,
-          queue: params.queue,
-          action: params.action,
-          params: params.params,
-          scheduled_at: params.scheduled_at
-        }
+      attrs = %{
+        performer: params.performer,
+        scope: params.scope,
+        sequence: params.sequence,
+        queue: params.queue,
+        action: params.action,
+        params: params.params,
+        scheduled_at: params.scheduled_at
+      }
 
       assert {:ok, %Job{} = job} = Queue.create_job(attrs, TestRepo)
       assert job.timeout == Job.default_timeout()
@@ -275,16 +273,15 @@ defmodule Queuetopia.QueueTest do
     end
 
     test "with invalid params, returns a changeset error" do
-      attrs =
-        %{
-          performer: nil,
-          scope: nil,
-          sequence: nil,
-          queue: nil,
-          action: nil,
-          params: nil,
-          scheduled_at: utc_now()
-        }
+      attrs = %{
+        performer: nil,
+        scope: nil,
+        sequence: nil,
+        queue: nil,
+        action: nil,
+        params: nil,
+        scheduled_at: utc_now()
+      }
 
       assert {:error, changeset} = Queue.create_job(attrs, TestRepo)
       refute changeset.valid?
@@ -687,6 +684,41 @@ defmodule Queuetopia.QueueTest do
       end)
 
       assert Queue.list_jobs(TestRepo, search_query: "wrong") == []
+    end
+  end
+
+  describe "cleanup_completed_jobs/3" do
+    test "deletes old completed jobs" do
+      scope = "test_scope"
+
+      old_job = insert!(:job, scope: scope, done_at: utc_now() |> add(-8, :day))
+      recent_job = insert!(:job, scope: scope, done_at: utc_now() |> add(-6, :day))
+      pending_job = insert!(:job, scope: scope, done_at: nil)
+
+      assert {1, nil} = Queue.cleanup_completed_jobs(TestRepo, scope)
+
+      assert is_nil(TestRepo.get(Job, old_job.id))
+      assert TestRepo.get(Job, recent_job.id)
+      assert TestRepo.get(Job, pending_job.id)
+    end
+
+    test "respects custom retention" do
+      scope = "test_scope"
+
+      old_job = insert!(:job, scope: scope, done_at: utc_now() |> add(-3, :day))
+
+      assert {1, nil} = Queue.cleanup_completed_jobs(TestRepo, scope, {2, :day})
+      assert is_nil(TestRepo.get(Job, old_job.id))
+    end
+
+    test "only touches own scope" do
+      old_job_a = insert!(:job, scope: "a", done_at: utc_now() |> add(-8, :day))
+      old_job_b = insert!(:job, scope: "b", done_at: utc_now() |> add(-8, :day))
+
+      assert {1, nil} = Queue.cleanup_completed_jobs(TestRepo, "a")
+
+      assert is_nil(TestRepo.get(Job, old_job_a.id))
+      assert TestRepo.get(Job, old_job_b.id)
     end
   end
 
