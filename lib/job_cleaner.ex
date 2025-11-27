@@ -31,13 +31,15 @@ defmodule Queuetopia.JobCleaner do
   end
 
   @impl true
-  def handle_info(:cleanup, state) do
-    state = %{
-      repo: repo,
-      scope: scope,
-      cleanup_interval: cleanup_interval,
-      job_retention: job_retention
-    }
+  def handle_info(
+        :cleanup,
+        %{
+          repo: repo,
+          scope: scope,
+          cleanup_interval: cleanup_interval,
+          job_retention: job_retention
+        } = state
+      ) do
 
     Queue.cleanup_completed_jobs(repo, scope, job_retention)
 
