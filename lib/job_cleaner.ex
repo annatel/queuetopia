@@ -15,19 +15,16 @@ defmodule Queuetopia.JobCleaner do
 
   @impl true
   def init(opts) do
-    cleanup_interval = Keyword.fetch!(opts, :cleanup_interval)
-    job_retention = Keyword.get(opts, :job_retention)
-
     Process.send(self(), :cleanup, [])
 
     state = %{
       repo: Keyword.fetch!(opts, :repo),
       scope: Keyword.fetch!(opts, :scope),
-      cleanup_interval: cleanup_interval,
-      job_retention: job_retention
+      cleanup_interval: Keyword.fetch!(opts, :cleanup_interval),
+      job_retention: Keyword.get(opts, :job_retention)
     }
 
-    {:ok, state}
+    git{:ok, state}
   end
 
   @impl true

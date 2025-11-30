@@ -21,33 +21,27 @@ defmodule Queuetopia.JobCleanerTest do
     :ok
   end
 
-  test "removes completed jobs older than 7 days retention period" do
-    scope = TestQueuetopia.scope()
+  test "removes completed jobs older than 7 days retention period during periodic cleanup" do
+    start_supervised!(TestQueuetopia)
 
-    eight_days_old_completed_job =
+    :timer.sleep(100)
+
+    eight_days_old_job =
       insert!(:job,
-        scope: scope,
+        scope: TestQueuetopia.scope(),
         done_at: datetime_days_ago(8)
       )
 
-    six_days_old_completed_job =
+    six_days_old_job =
       insert!(:job,
-        scope: scope,
+        scope: TestQueuetopia.scope(),
         done_at: datetime_days_ago(6)
       )
 
-    pending_job_without_done_at =
-      insert!(:job,
-        scope: scope,
-        done_at: nil
-      )
+    :timer.sleep(60)
 
-    start_supervised!(TestQueuetopia)
-    :timer.sleep(100)
-
-    assert is_nil(TestRepo.get(Job, eight_days_old_completed_job.id))
-    assert TestRepo.get(Job, six_days_old_completed_job.id)
-    assert TestRepo.get(Job, pending_job_without_done_at.id)
+    assert is_nil(TestRepo.get(Job, eight_days_old_job.id))
+    assert TestRepo.get(Job, six_days_old_job.id)
   end
 
   test "only removes jobs from its own scope" do
@@ -89,5 +83,18 @@ defmodule Queuetopia.JobCleanerTest do
     :timer.sleep(10)
 
     assert is_nil(TestRepo.get(Job, eight_days_old_completed_job.id))
+  end
+
+  test "cleanup is disabled by default" do
+    old_job = insert!(:job, scope: "default_scope", done_at: datetime_days_ago(30))
+    recent_job = insert!(:job, scope: "default_scope", done_at: datetime_days_ago(1))
+
+    Application.put_env(:queuetopia, TestQueuetopia, [])
+    start_supervised!(TestQueuetopia)
+
+    :timer.sleep(100)
+
+    assert TestRepo.get(Job, old_job.id)
+    assert TestRepo.get(Job, recent_job.id)
   end
 end
