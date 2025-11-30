@@ -24,7 +24,7 @@ defmodule Queuetopia.JobCleaner do
       job_retention: Keyword.get(opts, :job_retention)
     }
 
-    git{:ok, state}
+    {:ok, state}
   end
 
   @impl true
