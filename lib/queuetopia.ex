@@ -66,9 +66,10 @@ defmodule Queuetopia do
       end
 
       defp to_ms({duration, unit}) do
-        DateTime.utc_now()
+        timestamp = DateTime.utc_now()
+        timestamp
         |> DateTime.add(duration, unit)
-        |> DateTime.diff(DateTime.utc_now(), :millisecond)
+        |> DateTime.diff(timestamp, :millisecond)
       end
 
       @doc """
