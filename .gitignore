@@ -29,6 +29,7 @@ queuetopia-*.tar
 .env
 .env.*
 !.env.example
+!.env.test
 !.env.mvno_containers
 !.env.mvno_containers_test
 
