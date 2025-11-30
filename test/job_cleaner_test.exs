@@ -1,17 +1,15 @@
 defmodule Queuetopia.JobCleanerTest do
-  use Queuetopia.DataCase
+  use Queuetopia.DataCase, async: false
 
   alias Queuetopia.Queue.Job
   alias Queuetopia.TestRepo
   alias Queuetopia.TestQueuetopia
 
-  defp datetime_ago(seconds) do
+  defp datetime_days_ago(days) do
     DateTime.utc_now()
-    |> DateTime.add(-seconds, :second)
+    |> DateTime.add(-days, :day)
     |> DateTime.truncate(:second)
   end
-
-  defp days_in_seconds(days), do: days * 24 * 60 * 60
 
   setup do
     Application.put_env(:queuetopia, TestQueuetopia, cleanup_interval: {50, :millisecond})
@@ -29,13 +27,13 @@ defmodule Queuetopia.JobCleanerTest do
     eight_days_old_completed_job =
       insert!(:job,
         scope: scope,
-        done_at: datetime_ago(days_in_seconds(8))
+        done_at: datetime_days_ago(8)
       )
 
     six_days_old_completed_job =
       insert!(:job,
         scope: scope,
-        done_at: datetime_ago(days_in_seconds(6))
+        done_at: datetime_days_ago(6)
       )
 
     pending_job_without_done_at =
@@ -59,13 +57,13 @@ defmodule Queuetopia.JobCleanerTest do
     our_eight_days_old_job =
       insert!(:job,
         scope: our_queue_scope,
-        done_at: datetime_ago(days_in_seconds(8))
+        done_at: datetime_days_ago(8)
       )
 
     other_eight_days_old_job =
       insert!(:job,
         scope: other_queue_scope,
-        done_at: datetime_ago(days_in_seconds(8))
+        done_at: datetime_days_ago(8)
       )
 
     start_supervised!(TestQueuetopia)
@@ -81,7 +79,7 @@ defmodule Queuetopia.JobCleanerTest do
     eight_days_old_completed_job =
       insert!(:job,
         scope: scope,
-        done_at: datetime_ago(days_in_seconds(8))
+        done_at: datetime_days_ago(8)
       )
 
     assert TestRepo.get(Job, eight_days_old_completed_job.id)
