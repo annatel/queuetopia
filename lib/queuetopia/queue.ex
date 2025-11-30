@@ -299,4 +299,17 @@ defmodule Queuetopia.Queue do
     |> where([lock], lock.queue == ^queue)
     |> repo.delete_all()
   end
+
+  @doc false
+  def cleanup_completed_jobs(repo, scope, job_retention \\ {7, :day}) do
+    {duration, unit} = job_retention
+    cutoff_date = DateTime.utc_now() |> DateTime.add(-duration, unit)
+
+    from(j in Job,
+      where: j.scope == ^scope,
+      where: not is_nil(j.done_at),
+      where: j.done_at < ^cutoff_date
+    )
+    |> repo.delete_all()
+  end
 end

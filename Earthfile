@@ -1,4 +1,4 @@
-VERSION 0.7
+VERSION 0.6
 
 elixir-base:
     FROM --platform=$BUILDPLATFORM elixir:1.18.4-otp-27-alpine
