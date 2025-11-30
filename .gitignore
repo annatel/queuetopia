@@ -24,4 +24,11 @@ queuetopia-*.tar
 
 .elixir_ls
 .tool-versions
+
+
 .env
+.env.*
+!.env.example
+!.env.mvno_containers
+!.env.mvno_containers_test
+
