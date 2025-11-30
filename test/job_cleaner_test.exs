@@ -74,4 +74,22 @@ defmodule Queuetopia.JobCleanerTest do
     assert is_nil(TestRepo.get(Job, our_eight_days_old_job.id))
     assert TestRepo.get(Job, other_eight_days_old_job.id)
   end
+
+  test "starts cleanup immediately when JobCleaner starts" do
+    scope = TestQueuetopia.scope()
+
+    eight_days_old_completed_job =
+      insert!(:job,
+        scope: scope,
+        done_at: datetime_ago(days_in_seconds(8))
+      )
+
+    assert TestRepo.get(Job, eight_days_old_completed_job.id)
+
+    start_supervised!(TestQueuetopia)
+
+    :timer.sleep(10)
+
+    assert is_nil(TestRepo.get(Job, eight_days_old_completed_job.id))
+  end
 end
