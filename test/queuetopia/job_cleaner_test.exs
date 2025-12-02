@@ -11,18 +11,22 @@ defmodule Queuetopia.JobCleanerTest do
     |> DateTime.truncate(:second)
   end
 
-  setup do
-    Application.put_env(:queuetopia, TestQueuetopia, cleanup_interval: {50, :millisecond})
+  # setup do
+  #   Application.put_env(:queuetopia, TestQueuetopia, cleanup_interval: {50, :millisecond})
+  #   Application.put_env(:queuetopia, :job_cleaner_initial_delay, 0)
 
-    on_exit(fn ->
-      Application.put_env(:queuetopia, TestQueuetopia, [])
-    end)
+  #   on_exit(fn ->
+  #     Application.put_env(:queuetopia, TestQueuetopia, [])
+  #     Application.delete_env(:queuetopia, :job_cleaner_initial_delay)
+  #   end)
 
-    :ok
-  end
+  #   :ok
+  # end
 
   test "removes completed jobs older than 7 days retention period during periodic cleanup" do
-    start_supervised!(TestQueuetopia)
+    start_supervised!(
+      {TestQueuetopia, cleanup_interval: {100, :millisecond}, job_cleaner_initial_delay: 0}
+    )
 
     :timer.sleep(100)
 
@@ -60,7 +64,10 @@ defmodule Queuetopia.JobCleanerTest do
         done_at: datetime_days_ago(8)
       )
 
-    start_supervised!(TestQueuetopia)
+    start_supervised!(
+      {TestQueuetopia, cleanup_interval: {100, :millisecond}, job_cleaner_initial_delay: 0}
+    )
+
     :timer.sleep(100)
 
     assert is_nil(TestRepo.get(Job, our_eight_days_old_job.id))
@@ -78,9 +85,11 @@ defmodule Queuetopia.JobCleanerTest do
 
     assert TestRepo.get(Job, eight_days_old_completed_job.id)
 
-    start_supervised!(TestQueuetopia)
+    start_supervised!(
+      {TestQueuetopia, cleanup_interval: {100, :millisecond}, job_cleaner_initial_delay: 0}
+    )
 
-    :timer.sleep(10)
+    :timer.sleep(50)
 
     assert is_nil(TestRepo.get(Job, eight_days_old_completed_job.id))
   end
@@ -96,5 +105,27 @@ defmodule Queuetopia.JobCleanerTest do
 
     assert TestRepo.get(Job, old_job.id)
     assert TestRepo.get(Job, recent_job.id)
+  end
+
+  test "respects job_cleaner_initial_delay before first cleanup" do
+    scope = TestQueuetopia.scope()
+
+    eight_days_old_job =
+      insert!(:job,
+        scope: scope,
+        done_at: datetime_days_ago(8)
+      )
+
+    start_supervised!(
+      {TestQueuetopia, cleanup_interval: {100, :millisecond}, job_cleaner_initial_delay: 20}
+    )
+
+    :timer.sleep(10)
+    assert TestRepo.get(Job, eight_days_old_job.id), "Job should still exist before initial delay"
+
+    :timer.sleep(15)
+
+    assert is_nil(TestRepo.get(Job, eight_days_old_job.id)),
+           "Job should be deleted after initial delay"
   end
 end

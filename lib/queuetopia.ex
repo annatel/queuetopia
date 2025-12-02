@@ -56,8 +56,9 @@ defmodule Queuetopia do
       @repo Keyword.fetch!(opts, :repo)
       @performer Keyword.fetch!(opts, :performer) |> to_string()
       @scope __MODULE__ |> to_string()
-      @cleanup_interval Keyword.get(opts, :cleanup_interval, nil)
+      @cleanup_interval Keyword.get(opts, :cleanup_interval)
       @job_retention Keyword.get(opts, :job_retention, {7, :day})
+      @job_cleaner_initial_delay Keyword.get(opts, :job_cleaner_initial_delay, :rand.uniform(100))
       @default_poll_interval 60 * 1_000
 
       defp config(otp_app, queue) when is_atom(otp_app) and is_atom(queue) do
@@ -65,7 +66,7 @@ defmodule Queuetopia do
         [otp_app: otp_app] ++ config
       end
 
-      defp to_ms({duration, unit}) do
+      defp to_ms({duration, unit}) when is_integer(duration) and is_atom(unit) do
         timestamp = DateTime.utc_now()
 
         timestamp
@@ -86,8 +87,12 @@ defmodule Queuetopia do
             Keyword.get(config, :poll_interval) ||
             @default_poll_interval
 
-        cleanup_interval = Keyword.get(config, :cleanup_interval) || @cleanup_interval
+        cleanup_interval = Keyword.get(opts, :cleanup_interval) || @cleanup_interval
+
         cleanup_interval_ms = cleanup_interval && to_ms(cleanup_interval)
+
+        job_cleaner_initial_delay =
+          Keyword.get(opts, :job_cleaner_initial_delay) || @job_cleaner_initial_delay
 
         disable? = Keyword.get(config, :disable?, false)
 
@@ -96,7 +101,8 @@ defmodule Queuetopia do
           poll_interval: poll_interval,
           number_of_concurrent_jobs: Keyword.get(config, :number_of_concurrent_jobs),
           cleanup_interval: cleanup_interval_ms,
-          job_retention: Keyword.get(config, :job_retention) || @job_retention
+          job_retention: @job_retention,
+          job_cleaner_initial_delay: job_cleaner_initial_delay
         ]
 
         if disable?, do: :ignore, else: Supervisor.start_link(__MODULE__, opts, name: __MODULE__)
@@ -146,7 +152,8 @@ defmodule Queuetopia do
            repo: Keyword.fetch!(args, :repo),
            scope: @scope,
            cleanup_interval: Keyword.fetch!(args, :cleanup_interval),
-           job_retention: Keyword.fetch!(args, :job_retention)
+           job_retention: Keyword.fetch!(args, :job_retention),
+           job_cleaner_initial_delay: Keyword.fetch!(args, :job_cleaner_initial_delay)
          ]}
       end
 

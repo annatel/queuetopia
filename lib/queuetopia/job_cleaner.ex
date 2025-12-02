@@ -15,32 +15,32 @@ defmodule Queuetopia.JobCleaner do
 
   @impl true
   def init(opts) do
-    Process.send(self(), :cleanup, [])
+    job_cleaner_initial_delay = Keyword.fetch!(opts, :job_cleaner_initial_delay)
+    Process.send_after(self(), :cleanup, job_cleaner_initial_delay)
 
     state = %{
       repo: Keyword.fetch!(opts, :repo),
       scope: Keyword.fetch!(opts, :scope),
       cleanup_interval: Keyword.fetch!(opts, :cleanup_interval),
-      job_retention: Keyword.get(opts, :job_retention)
+      job_retention: Keyword.get(opts, :job_retention),
+      job_cleaner_initial_delay: job_cleaner_initial_delay
     }
 
     {:ok, state}
   end
 
   @impl true
-  def handle_info(
-        :cleanup,
-        %{
-          repo: repo,
-          scope: scope,
-          cleanup_interval: cleanup_interval,
-          job_retention: job_retention
-        } = state
-      ) do
+  def handle_info(:cleanup, state) do
+    %{
+      repo: repo,
+      scope: scope,
+      cleanup_interval: cleanup_interval,
+      job_retention: job_retention
+    } = state
+
     Queue.cleanup_completed_jobs(repo, scope, job_retention)
 
     Process.send_after(self(), :cleanup, cleanup_interval)
-
     {:noreply, state}
   end
 end
