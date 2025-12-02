@@ -13,7 +13,7 @@ defmodule Queuetopia.JobCleanerTest do
 
   test "removes completed jobs older than 7 days retention period during periodic cleanup" do
     start_supervised!(
-      {TestQueuetopia, cleanup_interval: {100, :millisecond}, job_cleaner_initial_delay: 0}
+      {TestQueuetopia, cleanup_interval: {100, :millisecond}, job_cleaner_max_initial_delay: 0}
     )
 
     :timer.sleep(100)
@@ -53,7 +53,7 @@ defmodule Queuetopia.JobCleanerTest do
       )
 
     start_supervised!(
-      {TestQueuetopia, cleanup_interval: {100, :millisecond}, job_cleaner_initial_delay: 0}
+      {TestQueuetopia, cleanup_interval: {100, :millisecond}, job_cleaner_max_initial_delay: 0}
     )
 
     :timer.sleep(100)
@@ -74,7 +74,7 @@ defmodule Queuetopia.JobCleanerTest do
     assert TestRepo.get(Job, eight_days_old_completed_job.id)
 
     start_supervised!(
-      {TestQueuetopia, cleanup_interval: {100, :millisecond}, job_cleaner_initial_delay: 0}
+      {TestQueuetopia, cleanup_interval: {100, :millisecond}, job_cleaner_max_initial_delay: 0}
     )
 
     :timer.sleep(50)
@@ -95,7 +95,7 @@ defmodule Queuetopia.JobCleanerTest do
     assert TestRepo.get(Job, recent_job.id)
   end
 
-  test "respects job_cleaner_initial_delay before first cleanup" do
+  test "respects job_cleaner_max_initial_delay before first cleanup" do
     scope = TestQueuetopia.scope()
 
     eight_days_old_job =
@@ -105,7 +105,7 @@ defmodule Queuetopia.JobCleanerTest do
       )
 
     start_supervised!(
-      {TestQueuetopia, cleanup_interval: {100, :millisecond}, job_cleaner_initial_delay: 20}
+      {TestQueuetopia, cleanup_interval: {100, :millisecond}, job_cleaner_max_initial_delay: 20}
     )
 
     :timer.sleep(10)
