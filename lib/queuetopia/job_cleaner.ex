@@ -15,7 +15,6 @@ defmodule Queuetopia.JobCleaner do
 
   @impl true
   def init(opts) do
-
     # Add random dalay to mitigate deadlocks on starts
     job_cleaner_initial_delay =
       opts |> Keyword.fetch!(:job_cleaner_max_initial_delay) |> random_delay()
