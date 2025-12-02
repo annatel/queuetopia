@@ -118,8 +118,6 @@ cleanup_interval: {12, :hour},
 job_retention: {14, :day},
 job_cleaner_max_initial_delay: 300_000
 ```
-# No automatic cleanup (jobs persist forever)
-# cleanup_interval not set
  
 A Queuetopia expects a performer to exist.
 For example, the performer can be implemented like this:
