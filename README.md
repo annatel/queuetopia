@@ -90,9 +90,35 @@ defmodule MyApp.MailQueuetopia do
   use Queuetopia,
     otp_app: :my_app,
     performer: MyApp.MailQueuetopia.Performer,
-    repo: MyApp.Repo
+    repo: MyApp.Repo,
+    cleanup_interval: {1, :day},  
+    job_retention: {7, :day},
+    job_cleaner_max_initial_delay: 100
 end
 ```
+#### Job Cleanup Configuration
+
+Queuetopia provides automatic cleanup of completed jobs with the following options:
+
+- **`cleanup_interval`** *(optional)* - Defines how often the job cleaner runs. Must be a tuple like `{1, :day}`, `{2, :hour}`, `{30, :minute}`, etc. If not set, job cleanup is **disabled** and completed jobs will remain in the database indefinitely.
+
+- **`job_retention`** *(optional)* - Defines how long completed jobs are kept before being deleted. Defaults to `{7, :day}` (7 days). Must be a tuple specifying the duration.
+
+- **`job_cleaner_max_initial_delay`** *(optional)* - Maximum delay in milliseconds before the first cleanup runs when the JobCleaner starts. A random delay between 0 and this value is used to prevent multiple nodes from running cleanup simultaneously. If set to 0, cleanup runs immediately on startup. Defaults to a reasonable value to distribute cleanup across nodes.
+
+**Examples:**
+```elixir
+# Cleanup every hour, keep jobs for 3 days, start immediately
+cleanup_interval: {1, :hour},
+job_retention: {3, :day},
+job_cleaner_max_initial_delay: 0
+
+# Cleanup twice daily, keep jobs for 2 weeks, random startup delay up to 5 minutes
+cleanup_interval: {12, :hour},
+job_retention: {14, :day},
+job_cleaner_max_initial_delay: 300_000
+```
+ 
 A Queuetopia expects a performer to exist.
 For example, the performer can be implemented like this:
 
