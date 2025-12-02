@@ -11,18 +11,6 @@ defmodule Queuetopia.JobCleanerTest do
     |> DateTime.truncate(:second)
   end
 
-  # setup do
-  #   Application.put_env(:queuetopia, TestQueuetopia, cleanup_interval: {50, :millisecond})
-  #   Application.put_env(:queuetopia, :job_cleaner_initial_delay, 0)
-
-  #   on_exit(fn ->
-  #     Application.put_env(:queuetopia, TestQueuetopia, [])
-  #     Application.delete_env(:queuetopia, :job_cleaner_initial_delay)
-  #   end)
-
-  #   :ok
-  # end
-
   test "removes completed jobs older than 7 days retention period during periodic cleanup" do
     start_supervised!(
       {TestQueuetopia, cleanup_interval: {100, :millisecond}, job_cleaner_initial_delay: 0}
