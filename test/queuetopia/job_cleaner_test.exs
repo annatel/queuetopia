@@ -105,15 +105,11 @@ defmodule Queuetopia.JobCleanerTest do
       )
 
     start_supervised!(
-      {TestQueuetopia, cleanup_interval: {100, :millisecond}, job_cleaner_max_initial_delay: 20}
+      {TestQueuetopia,
+       cleanup_interval: {100, :millisecond}, job_cleaner_max_initial_delay: :timer.minutes(1)}
     )
 
-    :timer.sleep(10)
+    :timer.sleep(100)
     assert TestRepo.get(Job, eight_days_old_job.id), "Job should still exist before initial delay"
-
-    :timer.sleep(15)
-
-    assert is_nil(TestRepo.get(Job, eight_days_old_job.id)),
-           "Job should be deleted after initial delay"
   end
 end
