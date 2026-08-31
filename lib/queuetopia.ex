@@ -11,7 +11,8 @@ defmodule Queuetopia do
   All the queues share only the same scheduler and the same poll interval.
   They are completely independants.
 
-  A Queuetopia expects a performer to exist.
+  A Queuetopia expects a performer to exist, named after the Queuetopia module
+  by convention: `<Queuetopia module>.Performer`.
   For example, the performer can be implemented like this:
 
       defmodule MyApp.MailQueuetopia.Performer do
@@ -30,7 +31,6 @@ defmodule Queuetopia do
       defmodule MyApp.MailQueuetopia do
         use Queuetopia,
           otp_app: :my_app,
-          performer: MyApp.MailQueuetopia.Performer,
           repo: MyApp.Repo
       end
 
@@ -54,7 +54,7 @@ defmodule Queuetopia do
 
       @otp_app Keyword.fetch!(opts, :otp_app)
       @repo Keyword.fetch!(opts, :repo)
-      @performer Keyword.fetch!(opts, :performer) |> to_string()
+      @scheduler_repo Keyword.get(opts, :scheduler_repo)
       @scope __MODULE__ |> to_string()
       @cleanup_interval Keyword.get(opts, :cleanup_interval)
       @job_retention Keyword.get(opts, :job_retention, {7, :day})
@@ -96,8 +96,15 @@ defmodule Queuetopia do
 
         disable? = Keyword.get(config, :disable?, false)
 
+        scheduler_repo =
+          Keyword.get(opts, :scheduler_repo) ||
+            Keyword.get(config, :scheduler_repo) ||
+            @scheduler_repo ||
+            @repo
+
         opts = [
           repo: @repo,
+          scheduler_repo: scheduler_repo,
           poll_interval: poll_interval,
           number_of_concurrent_jobs: Keyword.get(config, :number_of_concurrent_jobs),
           cleanup_interval: cleanup_interval_ms,
@@ -131,7 +138,7 @@ defmodule Queuetopia do
          [
            name: scheduler(),
            task_supervisor_name: task_supervisor(),
-           repo: Keyword.fetch!(args, :repo),
+           repo: Keyword.fetch!(args, :scheduler_repo),
            scope: @scope,
            poll_interval: Keyword.fetch!(args, :poll_interval),
            number_of_concurrent_jobs: Keyword.fetch!(args, :number_of_concurrent_jobs)
@@ -149,7 +156,7 @@ defmodule Queuetopia do
         {Queuetopia.JobCleaner,
          [
            name: job_cleaner(),
-           repo: Keyword.fetch!(args, :repo),
+           repo: Keyword.fetch!(args, :scheduler_repo),
            scope: @scope,
            cleanup_interval: Keyword.fetch!(args, :cleanup_interval),
            job_retention: Keyword.fetch!(args, :job_retention),
@@ -174,6 +181,10 @@ defmodule Queuetopia do
 
         * `:max_attempts` - default to 20.
 
+        * `:notify?` - when `false`, does not wake up the scheduler. The job waits
+          for the next poll or an explicit `handle_event(:new_incoming_job)`.
+          (default: `true`)
+
       It is possible to schedule jobs in the future. In this FIFO, the first_in is determined by the scheduled_at.
       Jobs having the same scheduled_at will be ordered by their sequence (arrival order).
 
@@ -188,15 +199,18 @@ defmodule Queuetopia do
             )
           {:ok, %Job{}}
       """
-      @spec create_job(binary, binary, map, DateTime.t(), [Job.option()] | []) ::
+      @spec create_job(binary, binary, map, DateTime.t(), [
+              Job.option() | {:notify?, boolean}
+            ]) ::
               {:error, Ecto.Changeset.t()} | {:ok, Job.t()}
       def create_job(queue, action, params, scheduled_at \\ DateTime.utc_now(), opts \\ [])
           when is_binary(queue) and is_binary(action) and is_map(params) do
+        {notify?, opts} = Keyword.pop(opts, :notify?, true)
+
         attrs =
           %{
             scope: @scope,
             queue: queue,
-            performer: @performer,
             sequence: next_value!(),
             action: action,
             params: params,
@@ -205,7 +219,7 @@ defmodule Queuetopia do
           |> Map.merge(Enum.into(opts, %{}))
 
         with result = {:ok, _} <- Queuetopia.Queue.create_job(attrs, @repo) do
-          handle_event(:new_incoming_job)
+          if notify?, do: handle_event(:new_incoming_job)
           result
         else
           error -> error
@@ -229,7 +243,9 @@ defmodule Queuetopia do
             )
           %Job{}
       """
-      @spec create_job!(binary, binary, map, DateTime.t(), [Job.option()] | []) ::
+      @spec create_job!(binary, binary, map, DateTime.t(), [
+              Job.option() | {:notify?, boolean}
+            ]) ::
               Job.t()
       def create_job!(queue, action, params, scheduled_at \\ DateTime.utc_now(), opts \\ [])
           when is_binary(queue) and is_binary(action) and is_map(params) do
@@ -277,7 +293,6 @@ defmodule Queuetopia do
       end
 
       def repo(), do: @repo
-      def performer(), do: @performer
       def scope(), do: @scope
 
       @impl Queuetopia

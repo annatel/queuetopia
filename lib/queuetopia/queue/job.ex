@@ -19,7 +19,6 @@ defmodule Queuetopia.Queue.Job do
     field(:sequence, :integer)
     field(:scope, :string)
     field(:queue, :string)
-    field(:performer, :string)
     field(:action, :string)
     field(:params, :map)
     field(:timeout, :integer, default: @default_timeout)
@@ -48,7 +47,6 @@ defmodule Queuetopia.Queue.Job do
       :sequence,
       :scope,
       :queue,
-      :performer,
       :action,
       :params,
       :timeout,
@@ -60,7 +58,6 @@ defmodule Queuetopia.Queue.Job do
       :sequence,
       :scope,
       :queue,
-      :performer,
       :action,
       :params,
       :timeout,

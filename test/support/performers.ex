@@ -46,7 +46,62 @@ defmodule Queuetopia.TestPerfomer do
   end
 end
 
-defmodule Queuetopia.TestPerfomerWithBackoff do
+defmodule Queuetopia.TestQueuetopia.Performer do
+  use Queuetopia.Performer
+
+  alias Queuetopia.Queue.Job
+
+  @impl true
+  def perform(%Job{} = job) do
+    Queuetopia.TestPerfomer.perform(job)
+  end
+end
+
+defmodule Queuetopia.TestQueuetopia_2.Performer do
+  use Queuetopia.Performer
+
+  alias Queuetopia.Queue.Job
+
+  @impl true
+  def perform(%Job{} = job) do
+    Queuetopia.TestPerfomer.perform(job)
+  end
+end
+
+defmodule Queuetopia.TestQueuetopia_RedefTest.Performer do
+  use Queuetopia.Performer
+
+  alias Queuetopia.Queue.Job
+
+  @impl true
+  def perform(%Job{} = job) do
+    Queuetopia.TestPerfomer.perform(job)
+  end
+end
+
+defmodule Queuetopia.TestQueuetopia_InMemSeq.Performer do
+  use Queuetopia.Performer
+
+  alias Queuetopia.Queue.Job
+
+  @impl true
+  def perform(%Job{} = job) do
+    Queuetopia.TestPerfomer.perform(job)
+  end
+end
+
+defmodule Queuetopia.TestQueuetopia_SchedulerRepo.Performer do
+  use Queuetopia.Performer
+
+  alias Queuetopia.Queue.Job
+
+  @impl true
+  def perform(%Job{} = job) do
+    Queuetopia.TestPerfomer.perform(job)
+  end
+end
+
+defmodule Queuetopia.TestQueuetopiaWithBackoff.Performer do
   use Queuetopia.Performer
 
   alias Queuetopia.Queue.Job
@@ -61,7 +116,7 @@ defmodule Queuetopia.TestPerfomerWithBackoff do
   def backoff(%Job{}), do: 20 * 1_000
 end
 
-defmodule Queuetopia.TestPerfomerWithHandleFailedJob do
+defmodule Queuetopia.TestQueuetopiaWithHandleFailedJob.Performer do
   use Queuetopia.Performer
 
   alias Queuetopia.Queue.Job
@@ -78,7 +133,7 @@ defmodule Queuetopia.TestPerfomerWithHandleFailedJob do
   end
 end
 
-defmodule Queuetopia.TestPerfomerThrowingInHandleFailedJob do
+defmodule Queuetopia.TestQueuetopiaThrowingInHandleFailedJob.Performer do
   use Queuetopia.Performer
 
   alias Queuetopia.Queue.Job
@@ -94,7 +149,7 @@ defmodule Queuetopia.TestPerfomerThrowingInHandleFailedJob do
   end
 end
 
-defmodule Queuetopia.TestPerfomerRaisingInHandleFailedJob do
+defmodule Queuetopia.TestQueuetopiaRaisingInHandleFailedJob.Performer do
   use Queuetopia.Performer
 
   alias Queuetopia.Queue.Job
@@ -110,7 +165,7 @@ defmodule Queuetopia.TestPerfomerRaisingInHandleFailedJob do
   end
 end
 
-defmodule Queuetopia.TestPerfomerErroringInHandleFailedJob do
+defmodule Queuetopia.TestQueuetopiaErroringInHandleFailedJob.Performer do
   use Queuetopia.Performer
 
   alias Queuetopia.Queue.Job
@@ -126,7 +181,7 @@ defmodule Queuetopia.TestPerfomerErroringInHandleFailedJob do
   end
 end
 
-defmodule Queuetopia.TestPerfomerExitingInHandleFailedJob do
+defmodule Queuetopia.TestQueuetopiaExitingInHandleFailedJob.Performer do
   use Queuetopia.Performer
 
   alias Queuetopia.Queue.Job

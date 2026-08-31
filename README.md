@@ -80,16 +80,16 @@ Each migration can be called separately.
 
 ### Defining the Queuetopia
 
-A Queuetopia must be informed a repo to persist the jobs and a performer module,
-responsible to execute the jobs.
+A Queuetopia must be informed a repo to persist the jobs. The jobs are executed
+by a performer module, named after the Queuetopia module by convention:
+`<Queuetopia module>.Performer`.
 
-Define a Queuetopia with a repo and a perfomer like this:
+Define a Queuetopia with a repo like this:
 
 ```elixir
 defmodule MyApp.MailQueuetopia do
   use Queuetopia,
     otp_app: :my_app,
-    performer: MyApp.MailQueuetopia.Performer,
     repo: MyApp.Repo,
     cleanup_interval: {1, :day},  
     job_retention: {7, :day},
@@ -119,7 +119,8 @@ job_retention: {14, :day},
 job_cleaner_max_initial_delay: 300_000
 ```
  
-A Queuetopia expects a performer to exist.
+A Queuetopia expects a performer to exist, named after the Queuetopia module by
+convention: `<Queuetopia module>.Performer`.
 For example, the performer can be implemented like this:
 
 ```elixir

@@ -1,6 +1,7 @@
 defmodule QueuetopiaTest do
   use Queuetopia.DataCase
   alias Queuetopia.{TestQueuetopia, TestQueuetopia_2, TestQueuetopia_RedefTest}
+  alias Queuetopia.{TestQueuetopia_Convention, TestQueuetopia_SchedulerRepo, TestSchedulerRepo}
   alias Queuetopia.Queue.Job
 
   setup do
@@ -40,6 +41,53 @@ defmodule QueuetopiaTest do
     end
   end
 
+  describe "start_link/1: scheduler_repo option" do
+    setup do
+      :ok = Ecto.Adapters.SQL.Sandbox.checkout(TestSchedulerRepo)
+      Ecto.Adapters.SQL.Sandbox.mode(TestSchedulerRepo, {:shared, self()})
+      :ok
+    end
+
+    test "preseance to the param" do
+      Application.put_env(:queuetopia, TestQueuetopia, scheduler_repo: TestRepo)
+
+      start_supervised!({TestQueuetopia, scheduler_repo: TestSchedulerRepo})
+
+      %{repo: TestSchedulerRepo} = :sys.get_state(TestQueuetopia.Scheduler)
+    end
+
+    test "when there is no param, try to take the value from the config" do
+      Application.put_env(:queuetopia, TestQueuetopia, scheduler_repo: TestSchedulerRepo)
+
+      start_supervised!(TestQueuetopia)
+
+      %{repo: TestSchedulerRepo} = :sys.get_state(TestQueuetopia.Scheduler)
+    end
+
+    test "when there is no param and no config, takes the value from the use options" do
+      start_supervised!(TestQueuetopia_SchedulerRepo)
+
+      %{repo: TestSchedulerRepo} = :sys.get_state(TestQueuetopia_SchedulerRepo.Scheduler)
+    end
+
+    test "when there is no param, no config and no use option, falls back to the repo" do
+      start_supervised!(TestQueuetopia)
+
+      %{repo: TestRepo} = :sys.get_state(TestQueuetopia.Scheduler)
+    end
+
+    test "the job cleaner uses the scheduler_repo" do
+      start_supervised!(
+        {TestQueuetopia,
+         scheduler_repo: TestSchedulerRepo,
+         cleanup_interval: {1, :hour},
+         job_cleaner_max_initial_delay: 0}
+      )
+
+      %{repo: TestSchedulerRepo} = :sys.get_state(TestQueuetopia.JobCleaner)
+    end
+  end
+
   test "disable? option" do
     Application.put_env(:queuetopia, TestQueuetopia, disable?: true)
     start_supervised!(TestQueuetopia)
@@ -72,7 +120,6 @@ defmodule QueuetopiaTest do
       assert job.sequence == sequence + 1
       assert job.scope == TestQueuetopia.scope()
       assert job.queue == jobs_params.queue
-      assert job.performer == TestQueuetopia.performer()
       assert job.action == jobs_params.action
       assert job.params == jobs_params.params
       assert not is_nil(job.scheduled_at)
@@ -133,6 +180,37 @@ defmodule QueuetopiaTest do
 
       :sys.get_state(TestQueuetopia.Scheduler)
     end
+
+    test "with notify?: false, does not wake up the scheduler" do
+      Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 5_000)
+      start_supervised!(TestQueuetopia)
+
+      :sys.get_state(TestQueuetopia.Scheduler)
+
+      %{queue: queue, action: action, params: params} = params_for(:success_job)
+
+      assert {:ok, %Job{id: job_id}} =
+               TestQueuetopia.create_job(queue, action, params, DateTime.utc_now(),
+                 notify?: false
+               )
+
+      refute_receive {^queue, ^job_id, :ok}, 500
+
+      assert :ok = TestQueuetopia.handle_event(:new_incoming_job)
+      assert_receive {^queue, ^job_id, :ok}, 1_000
+
+      :sys.get_state(TestQueuetopia.Scheduler)
+    end
+  end
+
+  test "performs the jobs with the performer module named after the scope" do
+    start_supervised!({TestQueuetopia_Convention, poll_interval: 5_000})
+
+    %{queue: queue, action: action, params: params} = params_for(:success_job)
+
+    assert {:ok, %Job{id: job_id}} = TestQueuetopia_Convention.create_job(queue, action, params)
+
+    assert_receive {^queue, ^job_id, :performed_by_convention}, 1_000
   end
 
   test "create_job!/5 raises when params are not valid" do

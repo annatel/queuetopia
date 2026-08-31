@@ -53,7 +53,7 @@ defmodule Queuetopia.Queue do
   end
 
   @doc """
-  Creates a job, specifying the performer, the Queuetopia (scope), and the user params,
+  Creates a job, specifying the Queuetopia (scope), and the user params,
   including options.
   """
 
@@ -252,9 +252,8 @@ defmodule Queuetopia.Queue do
     |> repo.update!()
   end
 
-  defp resolve_performer(%Job{performer: performer}) do
-    performer
-    |> String.split(".")
+  defp resolve_performer(%Job{scope: scope}) do
+    (String.split(scope, ".") ++ ["Performer"])
     |> Module.safe_concat()
   end
 
