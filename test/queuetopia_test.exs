@@ -1,7 +1,7 @@
 defmodule QueuetopiaTest do
   use Queuetopia.DataCase
   alias Queuetopia.{TestQueuetopia, TestQueuetopia_2, TestQueuetopia_RedefTest}
-  alias Queuetopia.{TestQueuetopia_SchedulerRepo, TestSchedulerRepo}
+  alias Queuetopia.{TestQueuetopia_Convention, TestQueuetopia_SchedulerRepo, TestSchedulerRepo}
   alias Queuetopia.Queue.Job
 
   setup do
@@ -202,6 +202,16 @@ defmodule QueuetopiaTest do
 
       :sys.get_state(TestQueuetopia.Scheduler)
     end
+  end
+
+  test "performs the jobs with the performer module named after the scope" do
+    start_supervised!({TestQueuetopia_Convention, poll_interval: 5_000})
+
+    %{queue: queue, action: action, params: params} = params_for(:success_job)
+
+    assert {:ok, %Job{id: job_id}} = TestQueuetopia_Convention.create_job(queue, action, params)
+
+    assert_receive {^queue, ^job_id, :performed_by_convention}, 1_000
   end
 
   test "create_job!/5 raises when params are not valid" do

@@ -289,7 +289,7 @@ defmodule Queuetopia.QueueTest do
   end
 
   test "perform/1" do
-    job = insert!(:success_job)
+    job = insert!(:success_job, scope: Queuetopia.TestQueuetopia.scope())
     assert Queue.perform(job) == :ok
   end
 
@@ -333,7 +333,7 @@ defmodule Queuetopia.QueueTest do
     end
 
     test "when a job failed, persists the job as failed and record the error" do
-      job = insert!(:failure_job)
+      job = insert!(:failure_job, scope: Queuetopia.TestQueuetopia.scope())
 
       _ = Queue.persist_result!(TestRepo, job, {:error, "error"})
 
@@ -346,7 +346,7 @@ defmodule Queuetopia.QueueTest do
     end
 
     test "when a job returns an unexpected_response, persists the job as failed and record the response" do
-      job = insert!(:failure_job)
+      job = insert!(:failure_job, scope: Queuetopia.TestQueuetopia.scope())
 
       _ = Queue.persist_result!(TestRepo, job, "unexpected_response")
 
@@ -362,7 +362,7 @@ defmodule Queuetopia.QueueTest do
       %{id: id} =
         job =
         insert!(:failure_job,
-          performer: Queuetopia.TestPerfomerWithHandleFailedJob |> to_string
+          scope: Queuetopia.TestQueuetopiaWithHandleFailedJob |> to_string()
         )
 
       _ = Queue.persist_result!(TestRepo, job, {:error, "error"})
@@ -378,7 +378,11 @@ defmodule Queuetopia.QueueTest do
     end
 
     test "by default, backoff is exponential for retry" do
-      job = insert!(:failure_job, max_backoff: 10 * 60 * 1_000)
+      job =
+        insert!(:failure_job,
+          scope: Queuetopia.TestQueuetopia.scope(),
+          max_backoff: 10 * 60 * 1_000
+        )
 
       [2_000, 3_000, 5_000, 9_000, 17_000]
       |> Enum.each(fn backoff ->
@@ -404,7 +408,7 @@ defmodule Queuetopia.QueueTest do
       %{attempted_at: attempted_at} =
         job =
         insert!(:failure_job,
-          performer: Queuetopia.TestPerfomerWithBackoff |> to_string(),
+          scope: Queuetopia.TestQueuetopiaWithBackoff |> to_string(),
           attempted_at: utc_now() |> DateTime.truncate(:second)
         )
 
@@ -412,7 +416,7 @@ defmodule Queuetopia.QueueTest do
 
       %{next_attempt_at: next_attempt_at} = job = TestRepo.reload(job)
 
-      backoff = Queuetopia.TestPerfomerWithBackoff.backoff(job)
+      backoff = Queuetopia.TestQueuetopiaWithBackoff.Performer.backoff(job)
       assert backoff == 20 * 1_000
 
       assert_in_delta next_attempt_at |> DateTime.to_unix(),
@@ -428,7 +432,8 @@ defmodule Queuetopia.QueueTest do
     test "for default backoff, limit to maximum backoff" do
       max_backoff = 2_000
 
-      job = insert!(:failure_job, max_backoff: max_backoff)
+      job =
+        insert!(:failure_job, scope: Queuetopia.TestQueuetopia.scope(), max_backoff: max_backoff)
 
       _ = Queue.persist_result!(TestRepo, job, {:error, "error"})
 
