@@ -174,6 +174,10 @@ defmodule Queuetopia do
 
         * `:max_attempts` - default to 20.
 
+        * `:notify?` - when `false`, does not wake up the scheduler. The job waits
+          for the next poll or an explicit `handle_event(:new_incoming_job)`.
+          (default: `true`)
+
       It is possible to schedule jobs in the future. In this FIFO, the first_in is determined by the scheduled_at.
       Jobs having the same scheduled_at will be ordered by their sequence (arrival order).
 
@@ -188,10 +192,14 @@ defmodule Queuetopia do
             )
           {:ok, %Job{}}
       """
-      @spec create_job(binary, binary, map, DateTime.t(), [Job.option()] | []) ::
+      @spec create_job(binary, binary, map, DateTime.t(), [
+              Job.option() | {:notify?, boolean}
+            ]) ::
               {:error, Ecto.Changeset.t()} | {:ok, Job.t()}
       def create_job(queue, action, params, scheduled_at \\ DateTime.utc_now(), opts \\ [])
           when is_binary(queue) and is_binary(action) and is_map(params) do
+        {notify?, opts} = Keyword.pop(opts, :notify?, true)
+
         attrs =
           %{
             scope: @scope,
@@ -205,7 +213,7 @@ defmodule Queuetopia do
           |> Map.merge(Enum.into(opts, %{}))
 
         with result = {:ok, _} <- Queuetopia.Queue.create_job(attrs, @repo) do
-          handle_event(:new_incoming_job)
+          if notify?, do: handle_event(:new_incoming_job)
           result
         else
           error -> error
@@ -229,7 +237,9 @@ defmodule Queuetopia do
             )
           %Job{}
       """
-      @spec create_job!(binary, binary, map, DateTime.t(), [Job.option()] | []) ::
+      @spec create_job!(binary, binary, map, DateTime.t(), [
+              Job.option() | {:notify?, boolean}
+            ]) ::
               Job.t()
       def create_job!(queue, action, params, scheduled_at \\ DateTime.utc_now(), opts \\ [])
           when is_binary(queue) and is_binary(action) and is_map(params) do

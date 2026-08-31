@@ -133,6 +133,27 @@ defmodule QueuetopiaTest do
 
       :sys.get_state(TestQueuetopia.Scheduler)
     end
+
+    test "with notify?: false, does not wake up the scheduler" do
+      Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 5_000)
+      start_supervised!(TestQueuetopia)
+
+      :sys.get_state(TestQueuetopia.Scheduler)
+
+      %{queue: queue, action: action, params: params} = params_for(:success_job)
+
+      assert {:ok, %Job{id: job_id}} =
+               TestQueuetopia.create_job(queue, action, params, DateTime.utc_now(),
+                 notify?: false
+               )
+
+      refute_receive {^queue, ^job_id, :ok}, 500
+
+      assert :ok = TestQueuetopia.handle_event(:new_incoming_job)
+      assert_receive {^queue, ^job_id, :ok}, 1_000
+
+      :sys.get_state(TestQueuetopia.Scheduler)
+    end
   end
 
   test "create_job!/5 raises when params are not valid" do
