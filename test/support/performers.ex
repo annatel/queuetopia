@@ -90,17 +90,6 @@ defmodule Queuetopia.TestQueuetopia_InMemSeq.Performer do
   end
 end
 
-defmodule Queuetopia.TestQueuetopia_SchedulerRepo.Performer do
-  use Queuetopia.Performer
-
-  alias Queuetopia.Queue.Job
-
-  @impl true
-  def perform(%Job{} = job) do
-    Queuetopia.TestPerfomer.perform(job)
-  end
-end
-
 defmodule Queuetopia.TestQueuetopiaWithBackoff.Performer do
   use Queuetopia.Performer
 

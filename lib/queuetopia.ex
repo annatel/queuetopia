@@ -54,7 +54,6 @@ defmodule Queuetopia do
 
       @otp_app Keyword.fetch!(opts, :otp_app)
       @repo Keyword.fetch!(opts, :repo)
-      @scheduler_repo Keyword.get(opts, :scheduler_repo)
       @scope __MODULE__ |> to_string()
       @cleanup_interval Keyword.get(opts, :cleanup_interval)
       @job_retention Keyword.get(opts, :job_retention, {7, :day})
@@ -96,15 +95,16 @@ defmodule Queuetopia do
 
         disable? = Keyword.get(config, :disable?, false)
 
-        scheduler_repo =
-          Keyword.get(opts, :scheduler_repo) ||
-            Keyword.get(config, :scheduler_repo) ||
-            @scheduler_repo ||
-            @repo
+        dedicated_scheduler_pool? =
+          Keyword.get(opts, :dedicated_scheduler_pool?) ||
+            Keyword.get(config, :dedicated_scheduler_pool?, false)
+
+        scheduler_pool_size =
+          if dedicated_scheduler_pool?, do: Queuetopia.SchedulerPool.pool_size()
 
         opts = [
           repo: @repo,
-          scheduler_repo: scheduler_repo,
+          scheduler_pool_size: scheduler_pool_size,
           poll_interval: poll_interval,
           number_of_concurrent_jobs: Keyword.get(config, :number_of_concurrent_jobs),
           cleanup_interval: cleanup_interval_ms,
@@ -122,11 +122,21 @@ defmodule Queuetopia do
       end
 
       defp build_children(args) do
-        [
-          task_supervisor_spec(),
-          scheduler_spec(args)
-        ]
+        [task_supervisor_spec()]
+        |> maybe_add_scheduler_pool(args)
+        |> Kernel.++([scheduler_spec(args)])
         |> maybe_add_cleanup(args)
+      end
+
+      defp maybe_add_scheduler_pool(children, args) do
+        case Keyword.get(args, :scheduler_pool_size) do
+          nil -> children
+          pool_size -> children ++ [{Queuetopia.SchedulerPool, repo: @repo, pool_size: pool_size}]
+        end
+      end
+
+      defp scheduler_dynamic_repo(args) do
+        if Keyword.get(args, :scheduler_pool_size), do: Queuetopia.SchedulerPool.name(@repo)
       end
 
       defp task_supervisor_spec do
@@ -138,7 +148,8 @@ defmodule Queuetopia do
          [
            name: scheduler(),
            task_supervisor_name: task_supervisor(),
-           repo: Keyword.fetch!(args, :scheduler_repo),
+           repo: Keyword.fetch!(args, :repo),
+           dynamic_repo: scheduler_dynamic_repo(args),
            scope: @scope,
            poll_interval: Keyword.fetch!(args, :poll_interval),
            number_of_concurrent_jobs: Keyword.fetch!(args, :number_of_concurrent_jobs)
@@ -156,7 +167,8 @@ defmodule Queuetopia do
         {Queuetopia.JobCleaner,
          [
            name: job_cleaner(),
-           repo: Keyword.fetch!(args, :scheduler_repo),
+           repo: Keyword.fetch!(args, :repo),
+           dynamic_repo: scheduler_dynamic_repo(args),
            scope: @scope,
            cleanup_interval: Keyword.fetch!(args, :cleanup_interval),
            job_retention: Keyword.fetch!(args, :job_retention),

@@ -27,10 +27,16 @@ defmodule Queuetopia.Scheduler do
   @impl true
   @spec init([option]) :: {:ok, map}
   def init(opts) do
+    repo = Keyword.get(opts, :repo)
+    dynamic_repo = Keyword.get(opts, :dynamic_repo)
+
+    if dynamic_repo, do: repo.put_dynamic_repo(dynamic_repo)
+
     Process.send(self(), {:poll, one_time?: false}, [])
 
     state = %{
-      repo: Keyword.get(opts, :repo),
+      repo: repo,
+      dynamic_repo: dynamic_repo,
       task_supervisor_name: Keyword.get(opts, :task_supervisor_name),
       poll_interval: Keyword.get(opts, :poll_interval),
       scope: Keyword.get(opts, :scope),

@@ -15,13 +15,20 @@ defmodule Queuetopia.JobCleaner do
 
   @impl true
   def init(opts) do
+    dynamic_repo = Keyword.get(opts, :dynamic_repo)
+
+    if dynamic_repo, do: Keyword.fetch!(opts, :repo).put_dynamic_repo(dynamic_repo)
+
     # Add random dalay to mitigate deadlocks on starts
     job_cleaner_initial_delay =
       opts |> Keyword.fetch!(:job_cleaner_max_initial_delay) |> random_delay()
 
     Process.send_after(self(), :cleanup, job_cleaner_initial_delay)
 
-    state = opts |> Keyword.take([:repo, :scope, :cleanup_interval, :job_retention]) |> Map.new()
+    state =
+      opts
+      |> Keyword.take([:repo, :dynamic_repo, :scope, :cleanup_interval, :job_retention])
+      |> Map.new()
 
     {:ok, state}
   end
