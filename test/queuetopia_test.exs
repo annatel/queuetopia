@@ -1,7 +1,7 @@
 defmodule QueuetopiaTest do
   use Queuetopia.DataCase
   alias Queuetopia.{TestQueuetopia, TestQueuetopia_2, TestQueuetopia_RedefTest}
-  alias Queuetopia.{TestQueuetopia_Convention, TestQueuetopia_SchedulerRepo, TestSchedulerRepo}
+  alias Queuetopia.TestQueuetopia_Convention
   alias Queuetopia.Queue.Job
 
   setup do
@@ -41,50 +41,41 @@ defmodule QueuetopiaTest do
     end
   end
 
-  describe "start_link/1: scheduler_repo option" do
+  describe "start_link/1: dedicated scheduler pool" do
     setup do
-      :ok = Ecto.Adapters.SQL.Sandbox.checkout(TestSchedulerRepo)
-      Ecto.Adapters.SQL.Sandbox.mode(TestSchedulerRepo, {:shared, self()})
+      on_exit(fn -> System.delete_env("QUEUETOPIA_SCHEDULER_POOL_SIZE") end)
       :ok
     end
 
-    test "preseance to the param" do
-      Application.put_env(:queuetopia, TestQueuetopia, scheduler_repo: TestRepo)
-
-      start_supervised!({TestQueuetopia, scheduler_repo: TestSchedulerRepo})
-
-      %{repo: TestSchedulerRepo} = :sys.get_state(TestQueuetopia.Scheduler)
-    end
-
-    test "when there is no param, try to take the value from the config" do
-      Application.put_env(:queuetopia, TestQueuetopia, scheduler_repo: TestSchedulerRepo)
-
-      start_supervised!(TestQueuetopia)
-
-      %{repo: TestSchedulerRepo} = :sys.get_state(TestQueuetopia.Scheduler)
-    end
-
-    test "when there is no param and no config, takes the value from the use options" do
-      start_supervised!(TestQueuetopia_SchedulerRepo)
-
-      %{repo: TestSchedulerRepo} = :sys.get_state(TestQueuetopia_SchedulerRepo.Scheduler)
-    end
-
-    test "when there is no param, no config and no use option, falls back to the repo" do
-      start_supervised!(TestQueuetopia)
-
-      %{repo: TestRepo} = :sys.get_state(TestQueuetopia.Scheduler)
-    end
-
-    test "the job cleaner uses the scheduler_repo" do
+    test "by default, the scheduler and the job cleaner poll through the repo" do
       start_supervised!(
-        {TestQueuetopia,
-         scheduler_repo: TestSchedulerRepo,
-         cleanup_interval: {1, :hour},
-         job_cleaner_max_initial_delay: 0}
+        {TestQueuetopia, cleanup_interval: {1, :hour}, job_cleaner_max_initial_delay: 0}
       )
 
-      %{repo: TestSchedulerRepo} = :sys.get_state(TestQueuetopia.JobCleaner)
+      assert %{repo: TestRepo, dynamic_repo: nil} = :sys.get_state(TestQueuetopia.Scheduler)
+      assert %{repo: TestRepo, dynamic_repo: nil} = :sys.get_state(TestQueuetopia.JobCleaner)
+    end
+
+    test "when enabled without QUEUETOPIA_SCHEDULER_POOL_SIZE, raises at startup" do
+      Application.put_env(:queuetopia, TestQueuetopia, dedicated_scheduler_pool?: true)
+
+      assert_raise System.EnvError, fn -> TestQueuetopia.start_link() end
+    end
+
+    test "when enabled, the scheduler and the job cleaner poll through a shared dedicated pool" do
+      System.put_env("QUEUETOPIA_SCHEDULER_POOL_SIZE", "2")
+      Application.put_env(:queuetopia, TestQueuetopia, dedicated_scheduler_pool?: true)
+
+      pool = Queuetopia.SchedulerPool.name(TestRepo)
+      start_pool_in_auto_sandbox(pool)
+
+      start_supervised!(
+        {TestQueuetopia, cleanup_interval: {1, :hour}, job_cleaner_max_initial_delay: 0}
+      )
+
+      assert is_pid(Process.whereis(pool))
+      assert %{repo: TestRepo, dynamic_repo: ^pool} = :sys.get_state(TestQueuetopia.Scheduler)
+      assert %{repo: TestRepo, dynamic_repo: ^pool} = :sys.get_state(TestQueuetopia.JobCleaner)
     end
   end
 
@@ -264,6 +255,13 @@ defmodule QueuetopiaTest do
       assert {:error, "Queuetopia.TestQueuetopia is down"} ==
                TestQueuetopia.handle_event(:new_incoming_job)
     end
+  end
+
+  defp start_pool_in_auto_sandbox(pool) do
+    {:ok, _pid} = TestRepo.start_link(name: pool, pool_size: 2)
+    TestRepo.put_dynamic_repo(pool)
+    Ecto.Adapters.SQL.Sandbox.mode(TestRepo, :auto)
+    TestRepo.put_dynamic_repo(TestRepo)
   end
 
   describe "next_value!/0" do
