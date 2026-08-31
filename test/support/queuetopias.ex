@@ -22,6 +22,14 @@ defmodule Queuetopia.TestQueuetopia_RedefTest do
   def next_value!, do: 666
 end
 
+defmodule Queuetopia.TestQueuetopia_SchedulerRepo do
+  use Queuetopia,
+    otp_app: :queuetopia,
+    repo: Queuetopia.TestRepo,
+    scheduler_repo: Queuetopia.TestSchedulerRepo,
+    performer: Queuetopia.TestPerfomer
+end
+
 defmodule Queuetopia.TestQueuetopia_InMemSeq do
   use Queuetopia,
     otp_app: :queuetopia,

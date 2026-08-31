@@ -54,6 +54,7 @@ defmodule Queuetopia do
 
       @otp_app Keyword.fetch!(opts, :otp_app)
       @repo Keyword.fetch!(opts, :repo)
+      @scheduler_repo Keyword.get(opts, :scheduler_repo)
       @performer Keyword.fetch!(opts, :performer) |> to_string()
       @scope __MODULE__ |> to_string()
       @cleanup_interval Keyword.get(opts, :cleanup_interval)
@@ -96,8 +97,15 @@ defmodule Queuetopia do
 
         disable? = Keyword.get(config, :disable?, false)
 
+        scheduler_repo =
+          Keyword.get(opts, :scheduler_repo) ||
+            Keyword.get(config, :scheduler_repo) ||
+            @scheduler_repo ||
+            @repo
+
         opts = [
           repo: @repo,
+          scheduler_repo: scheduler_repo,
           poll_interval: poll_interval,
           number_of_concurrent_jobs: Keyword.get(config, :number_of_concurrent_jobs),
           cleanup_interval: cleanup_interval_ms,
@@ -131,7 +139,7 @@ defmodule Queuetopia do
          [
            name: scheduler(),
            task_supervisor_name: task_supervisor(),
-           repo: Keyword.fetch!(args, :repo),
+           repo: Keyword.fetch!(args, :scheduler_repo),
            scope: @scope,
            poll_interval: Keyword.fetch!(args, :poll_interval),
            number_of_concurrent_jobs: Keyword.fetch!(args, :number_of_concurrent_jobs)
@@ -149,7 +157,7 @@ defmodule Queuetopia do
         {Queuetopia.JobCleaner,
          [
            name: job_cleaner(),
-           repo: Keyword.fetch!(args, :repo),
+           repo: Keyword.fetch!(args, :scheduler_repo),
            scope: @scope,
            cleanup_interval: Keyword.fetch!(args, :cleanup_interval),
            job_retention: Keyword.fetch!(args, :job_retention),
