@@ -53,7 +53,7 @@ defmodule Queuetopia.Queue do
   end
 
   @doc """
-  Creates a job, specifying the performer, the Queuetopia (scope), and the user params,
+  Creates a job, specifying the Queuetopia (scope), and the user params,
   including options.
   """
 

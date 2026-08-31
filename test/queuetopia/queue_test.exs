@@ -228,7 +228,6 @@ defmodule Queuetopia.QueueTest do
       params = params_for(:job)
 
       attrs = %{
-        performer: params.performer,
         scope: params.scope,
         sequence: params.sequence,
         queue: params.queue,
@@ -244,7 +243,6 @@ defmodule Queuetopia.QueueTest do
       assert job.sequence >= 1
       assert job.scope == params.scope
       assert job.queue == params.queue
-      assert job.performer == to_string(params.performer)
       assert job.action == params.action
       assert job.params == params.params
       assert not is_nil(job.scheduled_at)
@@ -257,7 +255,6 @@ defmodule Queuetopia.QueueTest do
       params = params_for(:job)
 
       attrs = %{
-        performer: params.performer,
         scope: params.scope,
         sequence: params.sequence,
         queue: params.queue,
@@ -274,7 +271,6 @@ defmodule Queuetopia.QueueTest do
 
     test "with invalid params, returns a changeset error" do
       attrs = %{
-        performer: nil,
         scope: nil,
         sequence: nil,
         queue: nil,

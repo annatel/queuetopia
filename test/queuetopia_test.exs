@@ -120,7 +120,6 @@ defmodule QueuetopiaTest do
       assert job.sequence == sequence + 1
       assert job.scope == TestQueuetopia.scope()
       assert job.queue == jobs_params.queue
-      assert job.performer == TestQueuetopia.performer()
       assert job.action == jobs_params.action
       assert job.params == jobs_params.params
       assert not is_nil(job.scheduled_at)

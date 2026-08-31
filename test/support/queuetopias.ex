@@ -1,22 +1,19 @@
 defmodule Queuetopia.TestQueuetopia do
   use Queuetopia,
     otp_app: :queuetopia,
-    repo: Queuetopia.TestRepo,
-    performer: Queuetopia.TestPerfomer
+    repo: Queuetopia.TestRepo
 end
 
 defmodule Queuetopia.TestQueuetopia_2 do
   use Queuetopia,
     otp_app: :queuetopia,
-    repo: Queuetopia.TestRepo,
-    performer: Queuetopia.TestPerfomer
+    repo: Queuetopia.TestRepo
 end
 
 defmodule Queuetopia.TestQueuetopia_RedefTest do
   use Queuetopia,
     otp_app: :queuetopia,
-    repo: Queuetopia.TestRepo,
-    performer: Queuetopia.TestPerformer
+    repo: Queuetopia.TestRepo
 
   @impl true
   def next_value!, do: 666
@@ -26,15 +23,13 @@ defmodule Queuetopia.TestQueuetopia_SchedulerRepo do
   use Queuetopia,
     otp_app: :queuetopia,
     repo: Queuetopia.TestRepo,
-    scheduler_repo: Queuetopia.TestSchedulerRepo,
-    performer: Queuetopia.TestPerfomer
+    scheduler_repo: Queuetopia.TestSchedulerRepo
 end
 
 defmodule Queuetopia.TestQueuetopia_Convention do
   use Queuetopia,
     otp_app: :queuetopia,
-    repo: Queuetopia.TestRepo,
-    performer: Queuetopia.TestPerfomer
+    repo: Queuetopia.TestRepo
 end
 
 defmodule Queuetopia.TestQueuetopia_Convention.Performer do
@@ -52,8 +47,7 @@ end
 defmodule Queuetopia.TestQueuetopia_InMemSeq do
   use Queuetopia,
     otp_app: :queuetopia,
-    repo: Queuetopia.TestRepo,
-    performer: Queuetopia.TestPerfomer
+    repo: Queuetopia.TestRepo
 
   def next_value!, do: Queuetopia.InMemorySequence.next_value!(TestInMemSeq)
 end
@@ -61,27 +55,23 @@ end
 defmodule Queuetopia.TestQueuetopiaThrowingInHandleFailedJob do
   use Queuetopia,
     otp_app: :queuetopia,
-    repo: Queuetopia.TestRepo,
-    performer: Queuetopia.TestPerfomer
+    repo: Queuetopia.TestRepo
 end
 
 defmodule Queuetopia.TestQueuetopiaRaisingInHandleFailedJob do
   use Queuetopia,
     otp_app: :queuetopia,
-    repo: Queuetopia.TestRepo,
-    performer: Queuetopia.TestPerfomer
+    repo: Queuetopia.TestRepo
 end
 
 defmodule Queuetopia.TestQueuetopiaErroringInHandleFailedJob do
   use Queuetopia,
     otp_app: :queuetopia,
-    repo: Queuetopia.TestRepo,
-    performer: Queuetopia.TestPerfomer
+    repo: Queuetopia.TestRepo
 end
 
 defmodule Queuetopia.TestQueuetopiaExitingInHandleFailedJob do
   use Queuetopia,
     otp_app: :queuetopia,
-    repo: Queuetopia.TestRepo,
-    performer: Queuetopia.TestPerfomer
+    repo: Queuetopia.TestRepo
 end

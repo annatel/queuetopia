@@ -6,7 +6,6 @@ defmodule Queuetopia.Factories do
       sequence: System.unique_integer([:positive]),
       scope: "scope_#{System.unique_integer([:positive])}",
       queue: "queue_#{System.unique_integer([:positive])}",
-      performer: "performer",
       action: "action_#{System.unique_integer([:positive])}",
       params: %{},
       scheduled_at: DateTime.utc_now(),

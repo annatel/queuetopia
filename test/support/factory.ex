@@ -4,8 +4,6 @@ defmodule Queuetopia.Factory do
   alias Queuetopia.Queue.Job
   alias Queuetopia.Queue.Lock
 
-  @performer Queuetopia.TestPerfomer |> to_string()
-
   def build(:lock, attrs) do
     locked_at = utc_now()
     locked_until = locked_at |> add(3600, :second)
@@ -31,7 +29,6 @@ defmodule Queuetopia.Factory do
       sequence: Queuetopia.Sequences.next_value!(Queuetopia.TestRepo),
       scope: "scope_#{System.unique_integer([:positive])}",
       queue: "queue_#{System.unique_integer([:positive])}",
-      performer: @performer,
       action: "action_#{System.unique_integer([:positive])}",
       params: %{"bin_pid" => pid_to_bin()},
       scheduled_at: utc_now(),

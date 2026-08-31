@@ -11,7 +11,8 @@ defmodule Queuetopia do
   All the queues share only the same scheduler and the same poll interval.
   They are completely independants.
 
-  A Queuetopia expects a performer to exist.
+  A Queuetopia expects a performer to exist, named after the Queuetopia module
+  by convention: `<Queuetopia module>.Performer`.
   For example, the performer can be implemented like this:
 
       defmodule MyApp.MailQueuetopia.Performer do
@@ -30,7 +31,6 @@ defmodule Queuetopia do
       defmodule MyApp.MailQueuetopia do
         use Queuetopia,
           otp_app: :my_app,
-          performer: MyApp.MailQueuetopia.Performer,
           repo: MyApp.Repo
       end
 
@@ -55,7 +55,6 @@ defmodule Queuetopia do
       @otp_app Keyword.fetch!(opts, :otp_app)
       @repo Keyword.fetch!(opts, :repo)
       @scheduler_repo Keyword.get(opts, :scheduler_repo)
-      @performer Keyword.fetch!(opts, :performer) |> to_string()
       @scope __MODULE__ |> to_string()
       @cleanup_interval Keyword.get(opts, :cleanup_interval)
       @job_retention Keyword.get(opts, :job_retention, {7, :day})
@@ -212,7 +211,6 @@ defmodule Queuetopia do
           %{
             scope: @scope,
             queue: queue,
-            performer: @performer,
             sequence: next_value!(),
             action: action,
             params: params,
@@ -295,7 +293,6 @@ defmodule Queuetopia do
       end
 
       def repo(), do: @repo
-      def performer(), do: @performer
       def scope(), do: @scope
 
       @impl Queuetopia
