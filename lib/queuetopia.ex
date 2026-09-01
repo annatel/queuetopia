@@ -193,9 +193,9 @@ defmodule Queuetopia do
 
         * `:max_attempts` - default to 20.
 
-        * `:notify?` - when `false`, does not wake up the scheduler. The job waits
-          for the next poll or an explicit `handle_event(:new_incoming_job)`.
-          (default: `true`)
+      Creating a job never wakes up the scheduler: the job waits for the next
+      poll, or for an explicit `notify_scheduler/0` — typically called once
+      after the enclosing transaction commits.
 
       It is possible to schedule jobs in the future. In this FIFO, the first_in is determined by the scheduled_at.
       Jobs having the same scheduled_at will be ordered by their sequence (arrival order).
@@ -211,14 +211,10 @@ defmodule Queuetopia do
             )
           {:ok, %Job{}}
       """
-      @spec create_job(binary, binary, map, DateTime.t(), [
-              Job.option() | {:notify?, boolean}
-            ]) ::
+      @spec create_job(binary, binary, map, DateTime.t(), [Job.option()] | []) ::
               {:error, Ecto.Changeset.t()} | {:ok, Job.t()}
       def create_job(queue, action, params, scheduled_at \\ DateTime.utc_now(), opts \\ [])
           when is_binary(queue) and is_binary(action) and is_map(params) do
-        {notify?, opts} = Keyword.pop(opts, :notify?, true)
-
         attrs =
           %{
             scope: @scope,
@@ -230,12 +226,7 @@ defmodule Queuetopia do
           }
           |> Map.merge(Enum.into(opts, %{}))
 
-        with result = {:ok, _} <- Queuetopia.Queue.create_job(attrs, @repo) do
-          if notify?, do: handle_event(:new_incoming_job)
-          result
-        else
-          error -> error
-        end
+        Queuetopia.Queue.create_job(attrs, @repo)
       end
 
       @doc """
@@ -255,9 +246,7 @@ defmodule Queuetopia do
             )
           %Job{}
       """
-      @spec create_job!(binary, binary, map, DateTime.t(), [
-              Job.option() | {:notify?, boolean}
-            ]) ::
+      @spec create_job!(binary, binary, map, DateTime.t(), [Job.option()] | []) ::
               Job.t()
       def create_job!(queue, action, params, scheduled_at \\ DateTime.utc_now(), opts \\ [])
           when is_binary(queue) and is_binary(action) and is_map(params) do
@@ -287,13 +276,13 @@ defmodule Queuetopia do
         Queuetopia.Queue.paginate_jobs(@repo, page_size, page_number, opts)
       end
 
-      def handle_event(:new_incoming_job) do
-        listen(:new_incoming_job)
-      end
-
-      @since "1.5.0"
-      @deprecated "Use handle_event/1 instead"
-      def listen(:new_incoming_job) do
+      @doc """
+      Wakes up the scheduler so it polls the queues now instead of waiting
+      for the next poll interval. Call it once after creating jobs — after
+      the enclosing transaction commits.
+      """
+      @spec notify_scheduler() :: :ok | {:error, binary}
+      def notify_scheduler() do
         scheduler_pid = Process.whereis(scheduler())
 
         if is_pid(scheduler_pid) do

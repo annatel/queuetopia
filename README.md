@@ -194,11 +194,12 @@ MyApp.MailQueuetopia.create_job("mails_queue_1", "send_mail", %{email_address: "
 to handle changeset errors.
 
 So, the mails_queue_1 was born and you can add it other jobs as we do above.
-When the job creation is out of transaction, Queuetopia is automatically notified about the new job.
-Anyway, you can notify the queuetopia about a new created job.
+Creating a job never wakes up the scheduler: the job waits for the next poll,
+or for an explicit notification — call it once after creating jobs, after the
+enclosing transaction commits.
 
 ```elixir
-MyApp.MailQueuetopia.notify(:new_incoming_job)
+MyApp.MailQueuetopia.notify_scheduler()
 ```
 
 ### One DB, many Queuetopia

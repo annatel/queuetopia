@@ -160,34 +160,19 @@ defmodule QueuetopiaTest do
               }} = TestQueuetopia_2.create_job(queue, action, params)
     end
 
-    test "a created job is immediatly tried if the queue is empty (no need to wait the poll_interval)" do
+    test "does not wake up the scheduler; notify_scheduler does" do
       Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 5_000)
       start_supervised!(TestQueuetopia)
 
+      :sys.get_state(TestQueuetopia.Scheduler)
+
       %{queue: queue, action: action, params: params} = params_for(:success_job)
+
       assert {:ok, %Job{id: job_id}} = TestQueuetopia.create_job(queue, action, params)
-
-      assert_receive {^queue, ^job_id, :ok}, 1_000
-
-      :sys.get_state(TestQueuetopia.Scheduler)
-    end
-
-    test "with notify?: false, does not wake up the scheduler" do
-      Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 5_000)
-      start_supervised!(TestQueuetopia)
-
-      :sys.get_state(TestQueuetopia.Scheduler)
-
-      %{queue: queue, action: action, params: params} = params_for(:success_job)
-
-      assert {:ok, %Job{id: job_id}} =
-               TestQueuetopia.create_job(queue, action, params, DateTime.utc_now(),
-                 notify?: false
-               )
 
       refute_receive {^queue, ^job_id, :ok}, 500
 
-      assert :ok = TestQueuetopia.handle_event(:new_incoming_job)
+      assert :ok = TestQueuetopia.notify_scheduler()
       assert_receive {^queue, ^job_id, :ok}, 1_000
 
       :sys.get_state(TestQueuetopia.Scheduler)
@@ -200,6 +185,8 @@ defmodule QueuetopiaTest do
     %{queue: queue, action: action, params: params} = params_for(:success_job)
 
     assert {:ok, %Job{id: job_id}} = TestQueuetopia_Convention.create_job(queue, action, params)
+
+    assert :ok = TestQueuetopia_Convention.notify_scheduler()
 
     assert_receive {^queue, ^job_id, :performed_by_convention}, 1_000
   end
@@ -225,7 +212,7 @@ defmodule QueuetopiaTest do
     assert %{data: [], total: 2} = TestQueuetopia.paginate_jobs(1, 3)
   end
 
-  describe "handle_event/1" do
+  describe "notify_scheduler/0" do
     test "sends a poll message to the scheduler" do
       Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 5_000)
       start_supervised!(TestQueuetopia)
@@ -239,11 +226,11 @@ defmodule QueuetopiaTest do
 
       :sys.get_state(TestQueuetopia.Scheduler)
 
-      assert :ok = TestQueuetopia.handle_event(:new_incoming_job)
-      assert :ok = TestQueuetopia.handle_event(:new_incoming_job)
-      assert :ok = TestQueuetopia.handle_event(:new_incoming_job)
-      assert :ok = TestQueuetopia.handle_event(:new_incoming_job)
-      assert :ok = TestQueuetopia.handle_event(:new_incoming_job)
+      assert :ok = TestQueuetopia.notify_scheduler()
+      assert :ok = TestQueuetopia.notify_scheduler()
+      assert :ok = TestQueuetopia.notify_scheduler()
+      assert :ok = TestQueuetopia.notify_scheduler()
+      assert :ok = TestQueuetopia.notify_scheduler()
 
       {:messages, messages} = Process.info(scheduler_pid, :messages)
       assert length(messages) == 1
@@ -253,7 +240,7 @@ defmodule QueuetopiaTest do
 
     test "when the scheduler is down, returns an error tuple" do
       assert {:error, "Queuetopia.TestQueuetopia is down"} ==
-               TestQueuetopia.handle_event(:new_incoming_job)
+               TestQueuetopia.notify_scheduler()
     end
   end
 
