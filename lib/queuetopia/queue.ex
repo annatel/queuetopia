@@ -5,6 +5,7 @@ defmodule Queuetopia.Queue do
 
   alias Queuetopia.Queue.{Job, Lock, PendingQueue}
   alias Queuetopia.Queue.JobQueryable
+  alias Queuetopia.Queue.PendingQueueQueryable
 
   @lock_security_retention 1_000
 
@@ -146,7 +147,7 @@ defmodule Queuetopia.Queue do
   """
   @spec processable_now?(Job.t()) :: boolean
   def processable_now?(%Job{} = job) do
-    not done?(job) and not max_attempts_reached?(job) and scheduled_for_now?(job)
+    not done?(job) and not max_attempts_reached?(job) and runnable_now?(job)
   end
 
   @doc """
@@ -171,8 +172,8 @@ defmodule Queuetopia.Queue do
   Returns true if a job scheduled date is reached.
   Otherwise, returns false.
   """
-  @spec scheduled_for_now?(Job.t()) :: boolean
-  def scheduled_for_now?(%Job{} = job) do
+  @spec runnable_now?(Job.t()) :: boolean
+  def runnable_now?(%Job{} = job) do
     DateTime.compare(job.scheduled_at, DateTime.utc_now()) in [:eq, :lt] and
       (is_nil(job.next_attempt_at) or
          DateTime.compare(job.next_attempt_at, DateTime.utc_now()) in [:eq, :lt])
@@ -180,47 +181,22 @@ defmodule Queuetopia.Queue do
 
   @doc """
   List the available pending queues by scope a.k.a by Queuetopia.
+
+  The queues come from the queuetopia_pending_queues table.
   """
   @spec list_available_pending_queues(module, binary, keyword()) :: [binary]
   def list_available_pending_queues(repo, scope, opts \\ []) do
-    utc_now = DateTime.utc_now()
-
-    locked_queues =
-      Lock
-      |> select([:queue])
-      |> where([l], l.scope == ^scope)
-
-    blocked_queues =
-      Job
-      |> select([:queue])
-      |> where([j], j.scope == ^scope)
-      |> where([j], is_nil(j.done_at))
-      |> where([j], j.scheduled_at <= ^utc_now and j.next_attempt_at > ^utc_now)
-
-    where_immediately_executable_job = fn queryable ->
-      queryable
-      |> where(
-        [j],
-        j.scheduled_at <= ^utc_now and
-          (is_nil(j.next_attempt_at) or j.next_attempt_at <= ^utc_now)
-      )
-    end
-
     limit = Keyword.get(opts, :limit)
 
-    query =
-      Job
-      |> where([j], j.scope == ^scope)
-      |> where([j], is_nil(j.done_at))
-      |> where([j], j.attempts < j.max_attempts)
-      |> where([j], j.queue not in subquery(locked_queues))
-      |> where([j], j.queue not in subquery(blocked_queues))
-      |> where_immediately_executable_job.()
-      |> select([:queue])
-      |> distinct(true)
-      |> then(&query_limit(&1, limit))
-
-    repo.all(query) |> Enum.map(& &1.queue)
+    PendingQueueQueryable.queryable()
+    |> PendingQueueQueryable.filter(
+      scope: scope,
+      runnable_now?: true,
+      without_locked_queues: scope
+    )
+    |> select([pq], pq.queue)
+    |> query_limit(limit)
+    |> repo.all()
   end
 
   defp query_limit(query, limit) when is_integer(limit),
@@ -232,10 +208,10 @@ defmodule Queuetopia.Queue do
   Get the next available pending job of a given queue by scope a.k.a by Queuetopia.
   If the queue is empty or the next pendign job is scheduled for later, returns nil.
   """
-  @spec get_next_pending_job(module, binary, binary) :: Job.t() | nil
-  def get_next_pending_job(repo, scope, queue) when is_binary(queue) do
+  @spec get_next_runnable_job(module, binary, binary) :: Job.t() | nil
+  def get_next_runnable_job(repo, scope, queue) when is_binary(queue) do
     case head_pending_job(repo, scope, queue) do
-      %Job{} = job -> if scheduled_for_now?(job), do: job, else: nil
+      %Job{} = job -> if runnable_now?(job), do: job, else: nil
       _ -> nil
     end
   end
@@ -253,12 +229,12 @@ defmodule Queuetopia.Queue do
       with {:done?, false} <- {:done?, done?(job)},
            {:max_attempts_reached?, false} <-
              {:max_attempts_reached?, max_attempts_reached?(job)},
-           {:scheduled_for_now?, true} <- {:scheduled_for_now?, scheduled_for_now?(job)} do
+           {:runnable_now?, true} <- {:runnable_now?, runnable_now?(job)} do
         {:ok, job}
       else
         {:done?, true} -> {:error, "already done"}
         {:max_attempts_reached?, true} -> {:error, "max attempts reached"}
-        {:scheduled_for_now?, false} -> {:error, "scheduled for later"}
+        {:runnable_now?, false} -> {:error, "scheduled for later"}
       end
     end)
     |> repo.transaction()

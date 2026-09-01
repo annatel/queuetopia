@@ -14,7 +14,9 @@ defmodule Queuetopia.SchedulerTest do
   test "poll only available queues" do
     scope = TestQueuetopia.scope()
 
-    %Job{queue: queue} = insert!(:slow_job, params: %{"duration" => 100}, scope: scope)
+    %Job{queue: queue} =
+      insert_pending_job!(:slow_job, params: %{"duration" => 100}, scope: scope)
+
     lock = insert!(:lock, scope: scope, queue: queue)
 
     start_supervised!(TestQueuetopia)
@@ -31,8 +33,8 @@ defmodule Queuetopia.SchedulerTest do
     test "poll number_of_concurrent_jobs" do
       scope = TestQueuetopia.scope()
 
-      %{id: job_id_1} = insert!(:slow_job, params: %{"duration" => 100}, scope: scope)
-      %{id: job_id_2} = insert!(:slow_job, params: %{"duration" => 100}, scope: scope)
+      %{id: job_id_1} = insert_pending_job!(:slow_job, params: %{"duration" => 100}, scope: scope)
+      %{id: job_id_2} = insert_pending_job!(:slow_job, params: %{"duration" => 100}, scope: scope)
 
       on_exit(fn ->
         Application.put_env(:queuetopia, TestQueuetopia, [])
@@ -54,8 +56,8 @@ defmodule Queuetopia.SchedulerTest do
     test "ensures concurrent jobs never pass the configured number_of_concurrent_jobs" do
       scope = TestQueuetopia.scope()
 
-      %{id: job_id_1} = insert!(:slow_job, params: %{"duration" => 200}, scope: scope)
-      %{id: job_id_2} = insert!(:slow_job, params: %{"duration" => 90}, scope: scope)
+      %{id: job_id_1} = insert_pending_job!(:slow_job, params: %{"duration" => 200}, scope: scope)
+      %{id: job_id_2} = insert_pending_job!(:slow_job, params: %{"duration" => 90}, scope: scope)
 
       on_exit(fn ->
         Application.put_env(:queuetopia, TestQueuetopia, [])
@@ -75,7 +77,7 @@ defmodule Queuetopia.SchedulerTest do
       assert job_id_1 in job_ids
       assert job_id_2 in job_ids
 
-      %{id: job_id_3} = insert!(:slow_job, params: %{"duration" => 100}, scope: scope)
+      %{id: job_id_3} = insert_pending_job!(:slow_job, params: %{"duration" => 100}, scope: scope)
 
       refute_receive {_, _, :started}, 30
       %{jobs: jobs} = :sys.get_state(TestQueuetopia.Scheduler)
@@ -97,7 +99,8 @@ defmodule Queuetopia.SchedulerTest do
   test "poll only queues of its scope" do
     _scope = TestQueuetopia.scope()
 
-    %Job{scope: _other_scope, queue: queue} = insert!(:slow_job, params: %{"duration" => 100})
+    %Job{scope: _other_scope, queue: queue} =
+      insert_pending_job!(:slow_job, params: %{"duration" => 100})
 
     start_supervised!({TestQueuetopia, poll_interval: 50})
 
@@ -108,7 +111,7 @@ defmodule Queuetopia.SchedulerTest do
     scope = TestQueuetopia.scope()
 
     %Job{queue: queue} =
-      insert!(:slow_job,
+      insert_pending_job!(:slow_job,
         params: %{"duration" => 200},
         scope: scope,
         timeout: 5_000
@@ -127,7 +130,7 @@ defmodule Queuetopia.SchedulerTest do
     scope = TestQueuetopia.scope()
 
     %Job{queue: queue} =
-      insert!(:slow_job,
+      insert_pending_job!(:slow_job,
         params: %{"duration" => 300},
         timeout: 500,
         scope: scope
@@ -150,7 +153,7 @@ defmodule Queuetopia.SchedulerTest do
     scope = TestQueuetopia.scope()
 
     %Job{queue: queue} =
-      insert!(:slow_job,
+      insert_pending_job!(:slow_job,
         params: %{"duration" => 5_000},
         timeout: 2_000,
         scope: scope
@@ -168,16 +171,39 @@ defmodule Queuetopia.SchedulerTest do
     assert_receive {^queue, _, :started}, 2_000
   end
 
+  test "refreshes a polled queue whose head job is not runnable yet" do
+    scope = TestQueuetopia.scope()
+    utc_now = DateTime.utc_now() |> DateTime.truncate(:second)
+    later = utc_now |> DateTime.add(3600)
+
+    %{queue: queue} = insert!(:job, scope: scope, scheduled_at: later)
+
+    TestRepo.insert!(%Queuetopia.Queue.PendingQueue{
+      scope: scope,
+      queue: queue,
+      next_runnable_at: utc_now
+    })
+
+    start_supervised!({TestQueuetopia, poll_interval: 5_000})
+
+    :sys.get_state(TestQueuetopia.Scheduler)
+
+    assert %{next_runnable_at: ^later} =
+             TestRepo.get_by(Queuetopia.Queue.PendingQueue, scope: scope, queue: queue)
+
+    refute_receive {^queue, _, _}, 100
+  end
+
   describe "isolation:" do
     test "a slow queue don't slow down the others" do
       scope = TestQueuetopia.scope()
 
-      %{queue: fast_queue, id: fast_job_id_1} = insert!(:success_job, scope: scope)
+      %{queue: fast_queue, id: fast_job_id_1} = insert_pending_job!(:success_job, scope: scope)
 
-      %{id: fast_job_id_2} = insert!(:success_job, scope: scope, queue: fast_queue)
+      %{id: fast_job_id_2} = insert_pending_job!(:success_job, scope: scope, queue: fast_queue)
 
       %{queue: slow_queue, id: slow_job_id} =
-        insert!(
+        insert_pending_job!(
           :slow_job,
           scope: scope,
           params: %{"duration" => 500},
@@ -198,9 +224,9 @@ defmodule Queuetopia.SchedulerTest do
     test "a failed job blocks only its own queue" do
       scope = TestQueuetopia.scope()
 
-      %{queue: failed_queue, id: failed_job_id} = insert!(:failure_job, scope: scope)
-      %{queue: success_queue, id: success_job_1} = insert!(:success_job, scope: scope)
-      %{id: success_job_2} = insert!(:success_job, scope: scope, queue: success_queue)
+      %{queue: failed_queue, id: failed_job_id} = insert_pending_job!(:failure_job, scope: scope)
+      %{queue: success_queue, id: success_job_1} = insert_pending_job!(:success_job, scope: scope)
+      %{id: success_job_2} = insert_pending_job!(:success_job, scope: scope, queue: success_queue)
 
       start_supervised!(TestQueuetopia)
 
@@ -216,15 +242,15 @@ defmodule Queuetopia.SchedulerTest do
       scope = TestQueuetopia.scope()
 
       %{queue: expired_queue, id: slow_job_id} =
-        insert!(:slow_job,
+        insert_pending_job!(:slow_job,
           params: %{"duration" => 500},
           scope: scope,
           timeout: 200,
           max_backoff: 0
         )
 
-      %{queue: success_queue, id: success_job_1} = insert!(:success_job, scope: scope)
-      %{id: success_job_2} = insert!(:success_job, scope: scope, queue: success_queue)
+      %{queue: success_queue, id: success_job_1} = insert_pending_job!(:success_job, scope: scope)
+      %{id: success_job_2} = insert_pending_job!(:success_job, scope: scope, queue: success_queue)
 
       start_supervised!(TestQueuetopia)
 
@@ -239,9 +265,11 @@ defmodule Queuetopia.SchedulerTest do
     test "a raising job blocks only its own queue" do
       scope = TestQueuetopia.scope()
 
-      %{queue: raising_queue, id: raising_job_id} = insert!(:raising_job, scope: scope)
-      %{queue: success_queue, id: success_job_1} = insert!(:success_job, scope: scope)
-      %{id: success_job_2} = insert!(:success_job, scope: scope, queue: success_queue)
+      %{queue: raising_queue, id: raising_job_id} =
+        insert_pending_job!(:raising_job, scope: scope)
+
+      %{queue: success_queue, id: success_job_1} = insert_pending_job!(:success_job, scope: scope)
+      %{id: success_job_2} = insert_pending_job!(:success_job, scope: scope, queue: success_queue)
 
       start_supervised!(TestQueuetopia)
 
@@ -260,7 +288,7 @@ defmodule Queuetopia.SchedulerTest do
       scope = TestQueuetopia.scope()
 
       %{id: failing_job_id, queue: queue} =
-        insert!(:failure_job, scope: scope, max_attempts: 10000)
+        insert_pending_job!(:failure_job, scope: scope, max_attempts: 10000)
 
       start_supervised!(TestQueuetopia)
 
@@ -283,7 +311,7 @@ defmodule Queuetopia.SchedulerTest do
       scope = TestQueuetopia.scope()
 
       %{id: slow_job_id, queue: queue} =
-        insert!(:slow_job,
+        insert_pending_job!(:slow_job,
           params: %{"duration" => 300},
           timeout: 100,
           max_backoff: 0,
@@ -303,7 +331,8 @@ defmodule Queuetopia.SchedulerTest do
     test "a raising job will be retried" do
       scope = TestQueuetopia.scope()
 
-      %{id: raising_job_id, queue: queue} = insert!(:raising_job, scope: scope, timeout: 50)
+      %{id: raising_job_id, queue: queue} =
+        insert_pending_job!(:raising_job, scope: scope, timeout: 50)
 
       start_supervised!(TestQueuetopia)
 
@@ -326,7 +355,7 @@ defmodule Queuetopia.SchedulerTest do
     test "a failed job persists the failure error and set the attempt attributes" do
       scope = TestQueuetopia.scope()
 
-      %{id: failing_job_id, queue: queue} = insert!(:failure_job, scope: scope)
+      %{id: failing_job_id, queue: queue} = insert_pending_job!(:failure_job, scope: scope)
 
       start_supervised!(TestQueuetopia)
 
@@ -340,7 +369,7 @@ defmodule Queuetopia.SchedulerTest do
                attempted_by: attempted_by,
                attempts: attempts,
                error: "error"
-             } = Queue.get_next_pending_job(TestRepo, scope, queue)
+             } = Queue.get_next_runnable_job(TestRepo, scope, queue)
 
       assert attempts > 0
       refute is_nil(attempted_at)
@@ -353,7 +382,7 @@ defmodule Queuetopia.SchedulerTest do
       scope = TestQueuetopia.scope()
 
       %{id: slow_job_id, queue: queue} =
-        insert!(:slow_job,
+        insert_pending_job!(:slow_job,
           params: %{"duration" => 100},
           timeout: 50,
           scope: scope
@@ -371,7 +400,7 @@ defmodule Queuetopia.SchedulerTest do
                attempted_by: attempted_by,
                attempts: attempts,
                error: "job_timeout"
-             } = Queue.get_next_pending_job(TestRepo, scope, queue)
+             } = Queue.get_next_runnable_job(TestRepo, scope, queue)
 
       assert attempts > 0
       refute is_nil(attempted_at)
@@ -391,7 +420,7 @@ defmodule Queuetopia.SchedulerTest do
         attempted_at: nil,
         attempted_by: nil,
         error: nil
-      } = insert!(:raising_job, scope: scope)
+      } = insert_pending_job!(:raising_job, scope: scope)
 
       start_supervised!(TestQueuetopia)
 
@@ -405,7 +434,7 @@ defmodule Queuetopia.SchedulerTest do
                attempted_by: attempted_by,
                attempts: attempts,
                error: error
-             } = Queue.get_next_pending_job(TestRepo, scope, queue)
+             } = Queue.get_next_runnable_job(TestRepo, scope, queue)
 
       assert attempts > 0
       refute is_nil(attempted_at)
@@ -417,7 +446,7 @@ defmodule Queuetopia.SchedulerTest do
 
     test "when performer throws an error on handle_failed jobs, persists the error" do
       job =
-        insert!(:failure_job,
+        insert_pending_job!(:failure_job,
           scope: Queuetopia.TestQueuetopiaThrowingInHandleFailedJob.scope()
         )
 
@@ -437,7 +466,7 @@ defmodule Queuetopia.SchedulerTest do
 
     test "when performer raises an error on handle_failed jobs, persists the error" do
       job =
-        insert!(:failure_job,
+        insert_pending_job!(:failure_job,
           scope: Queuetopia.TestQueuetopiaRaisingInHandleFailedJob.scope()
         )
 
@@ -457,7 +486,7 @@ defmodule Queuetopia.SchedulerTest do
 
     test "when performer exits an error on handle_failed jobs, persists the error" do
       job =
-        insert!(:failure_job,
+        insert_pending_job!(:failure_job,
           scope: Queuetopia.TestQueuetopiaExitingInHandleFailedJob.scope()
         )
 
@@ -477,7 +506,7 @@ defmodule Queuetopia.SchedulerTest do
 
     test "when performer send error an error on handle_failed jobs, persists the error" do
       job =
-        insert!(:failure_job,
+        insert_pending_job!(:failure_job,
           scope: Queuetopia.TestQueuetopiaErroringInHandleFailedJob.scope()
         )
 
@@ -499,7 +528,7 @@ defmodule Queuetopia.SchedulerTest do
   test "persist done_at for a success job" do
     scope = TestQueuetopia.scope()
 
-    job = insert!(:job, scope: scope, action: "success")
+    job = insert_pending_job!(:job, scope: scope, action: "success")
 
     start_supervised!(TestQueuetopia)
 
@@ -514,8 +543,8 @@ defmodule Queuetopia.SchedulerTest do
     test "after a job succeeded" do
       scope = TestQueuetopia.scope()
 
-      %{queue: queue, id: job_id_1} = insert!(:success_job, scope: scope)
-      %{id: job_id_2} = insert!(:success_job, scope: scope, queue: queue)
+      %{queue: queue, id: job_id_1} = insert_pending_job!(:success_job, scope: scope)
+      %{id: job_id_2} = insert_pending_job!(:success_job, scope: scope, queue: queue)
 
       Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 500)
 
@@ -531,7 +560,7 @@ defmodule Queuetopia.SchedulerTest do
       scope = TestQueuetopia.scope()
       Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 500)
 
-      %{queue: queue, id: job_id_1} = insert!(:failure_job, scope: scope)
+      %{queue: queue, id: job_id_1} = insert_pending_job!(:failure_job, scope: scope)
 
       start_supervised!(TestQueuetopia)
 

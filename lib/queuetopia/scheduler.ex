@@ -163,14 +163,22 @@ defmodule Queuetopia.Scheduler do
          repo,
          scope
        ) do
-    with %Job{} = job <- Queue.get_next_pending_job(repo, scope, queue),
-         {:ok, job} <- Queue.fetch_job(repo, job) do
-      task = Task.Supervisor.async_nolink(task_supervisor_name, Queue, :perform, [job])
+    case Queue.get_next_runnable_job(repo, scope, queue) do
+      nil ->
+        Queue.refresh_pending_queue!(repo, scope, queue)
+        nil
 
-      Process.send_after(self(), {:kill, task}, job.timeout)
-      {task.ref, job}
-    else
-      _ -> nil
+      %Job{} = job ->
+        case Queue.fetch_job(repo, job) do
+          {:ok, job} ->
+            task = Task.Supervisor.async_nolink(task_supervisor_name, Queue, :perform, [job])
+
+            Process.send_after(self(), {:kill, task}, job.timeout)
+            {task.ref, job}
+
+          _ ->
+            nil
+        end
     end
   end
 end

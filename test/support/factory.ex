@@ -24,6 +24,15 @@ defmodule Queuetopia.Factory do
     %{lock | locked_until: lock.locked_at}
   end
 
+  def build(:pending_queue, attrs) do
+    %Queuetopia.Queue.PendingQueue{
+      scope: "scope_#{System.unique_integer([:positive])}",
+      queue: "queue_#{System.unique_integer([:positive])}",
+      next_runnable_at: utc_now() |> DateTime.truncate(:second)
+    }
+    |> struct!(attrs)
+  end
+
   def build(:job, attrs) do
     %Job{
       sequence: Queuetopia.Sequences.next_value!(Queuetopia.TestRepo),
@@ -71,6 +80,19 @@ defmodule Queuetopia.Factory do
     job = build(:job, attrs)
 
     %{job | action: "fail"}
+  end
+
+  def insert_pending_job!(factory_name, attrs \\ []) do
+    job = insert!(factory_name, attrs)
+
+    build(:pending_queue,
+      scope: job.scope,
+      queue: job.queue,
+      next_runnable_at: job.scheduled_at |> DateTime.truncate(:second)
+    )
+    |> Queuetopia.TestRepo.insert!(on_conflict: :nothing)
+
+    job
   end
 
   def pid_to_bin(pid \\ self()) do

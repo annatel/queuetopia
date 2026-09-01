@@ -7,88 +7,79 @@ defmodule Queuetopia.QueueTest do
   alias Queuetopia.Queue.PendingQueue
 
   describe "list_available_pending_queues/1" do
-    test "returns available scoped queues with immediately executable job (first execution case)" do
-      %{queue: queue, scope: scope} = insert!(:job, scheduled_at: utc_now())
+    test "returns the scoped queues whose next_runnable_at is reached" do
+      %{queue: queue, scope: scope} = insert_pending_job!(:job)
 
       assert [^queue] = Queue.list_available_pending_queues(TestRepo, scope)
     end
 
-    test "returns available scoped queues with immediately executable job (retry case)" do
-      %{queue: queue, scope: scope} =
-        insert!(:job,
-          scheduled_at: utc_now() |> add(-3600),
-          next_attempt_at: utc_now()
-        )
-
-      assert [^queue] = Queue.list_available_pending_queues(TestRepo, scope)
-    end
-
-    test "don't list queues with not immediately executable job (first execution case)" do
-      %{scope: scope} = insert!(:job, scheduled_at: utc_now() |> add(3600))
+    test "don't list queues whose next_runnable_at is not reached yet" do
+      %{scope: scope} = insert_pending_job!(:job, scheduled_at: utc_now() |> add(3600))
 
       assert [] = Queue.list_available_pending_queues(TestRepo, scope)
     end
 
-    test "don't list queues with not immediately executable job (retry case)" do
-      %{scope: scope} =
-        insert!(:job,
-          scheduled_at: utc_now() |> add(-3600),
-          next_attempt_at: utc_now() |> add(3600)
-        )
+    test "don't list queues without pending row (done or exhausted jobs)" do
+      %{scope: scope_1} = insert!(:done_job)
 
-      assert [] = Queue.list_available_pending_queues(TestRepo, scope)
-    end
+      %{scope: scope_2} =
+        insert!(:job, scheduled_at: utc_now() |> add(-3600), attempts: 5, max_attempts: 5)
 
-    test "don't list queues whom jobs are done" do
-      %{queue: _queue_1, scope: scope_1} = insert!(:done_job)
       assert [] = Queue.list_available_pending_queues(TestRepo, scope_1)
-    end
-
-    test "don't list queues whom jobs reached the maximum number of attempts" do
-      %{queue: _queue, scope: scope} =
-        insert!(:job,
-          scheduled_at: utc_now() |> add(-3600),
-          next_attempt_at: utc_now(),
-          attempts: 5,
-          max_attempts: 5
-        )
-
-      assert [] = Queue.list_available_pending_queues(TestRepo, scope)
+      assert [] = Queue.list_available_pending_queues(TestRepo, scope_2)
     end
 
     test "when limit is given, returns only the specified number of rows from the result set" do
-      %{queue: queue, scope: scope} = insert!(:job)
-      insert!(:job, queue: queue, scope: scope)
+      %{scope: scope} = insert_pending_job!(:job)
+      insert_pending_job!(:job, scope: scope)
 
       assert [_] = Queue.list_available_pending_queues(TestRepo, scope, limit: 1)
     end
 
     test "when a queue is locked" do
-      %{queue: queue_1, scope: scope_1} = insert!(:job)
+      %{queue: queue_1, scope: scope_1} = insert_pending_job!(:job)
       _ = insert!(:lock, queue: queue_1, scope: scope_1)
 
       assert [] = Queue.list_available_pending_queues(TestRepo, scope_1)
     end
 
-    test "when a queue is blocked" do
-      %{queue: queue_1, scope: scope_1} = insert!(:job, next_attempt_at: utc_now() |> add(3600))
-      insert!(:job, queue: queue_1, scope: scope_1)
-
-      assert [] = Queue.list_available_pending_queues(TestRepo, scope_1)
-    end
-
     test "there is no collision between two queues with the same name but in different scope" do
-      %{queue: queue, scope: scope_1} = insert!(:job)
-      %{scope: scope_2} = insert!(:job, queue: queue)
+      %{queue: queue, scope: scope_1} = insert_pending_job!(:job)
+      %{scope: scope_2} = insert_pending_job!(:job, queue: queue)
 
       _ = insert!(:lock, queue: queue, scope: scope_1)
 
       assert [] = Queue.list_available_pending_queues(TestRepo, scope_1)
       assert [^queue] = Queue.list_available_pending_queues(TestRepo, scope_2)
     end
+
+    test "a new job on a queue in backoff makes it listed until the queue is refreshed" do
+      %{queue: queue, scope: scope} =
+        job =
+        insert_pending_job!(:failure_job,
+          scope: Queuetopia.TestQueuetopia.scope(),
+          max_backoff: 3_600_000
+        )
+
+      Queue.persist_result!(TestRepo, job, {:error, "error"})
+
+      assert [] = Queue.list_available_pending_queues(TestRepo, scope)
+
+      {:ok, _} =
+        Queue.create_job(
+          job_attrs(params_for(:job, scope: scope, queue: queue)),
+          TestRepo
+        )
+
+      assert [^queue] = Queue.list_available_pending_queues(TestRepo, scope)
+
+      Queue.refresh_pending_queue!(TestRepo, scope, queue)
+
+      assert [] = Queue.list_available_pending_queues(TestRepo, scope)
+    end
   end
 
-  describe "get_next_pending_job/2" do
+  describe "get_next_runnable_job/2" do
     test "returns the next pending job for a given scoped queue" do
       %{queue: queue_1, scope: scope_1} = insert!(:done_job)
       %{id: id_1} = insert!(:job, queue: queue_1, scope: scope_1)
@@ -97,9 +88,9 @@ defmodule Queuetopia.QueueTest do
 
       %{id: id_3, queue: queue_3, scope: scope_2} = insert!(:job)
 
-      assert %Job{id: ^id_1} = Queue.get_next_pending_job(TestRepo, scope_1, queue_1)
-      assert %Job{id: ^id_2} = Queue.get_next_pending_job(TestRepo, scope_1, queue_2)
-      assert %Job{id: ^id_3} = Queue.get_next_pending_job(TestRepo, scope_2, queue_3)
+      assert %Job{id: ^id_1} = Queue.get_next_runnable_job(TestRepo, scope_1, queue_1)
+      assert %Job{id: ^id_2} = Queue.get_next_runnable_job(TestRepo, scope_1, queue_2)
+      assert %Job{id: ^id_3} = Queue.get_next_runnable_job(TestRepo, scope_2, queue_3)
     end
 
     test "preseance by scheduled_at" do
@@ -115,7 +106,7 @@ defmodule Queuetopia.QueueTest do
           scheduled_at: utc_now
         )
 
-      assert %Job{id: ^id} = Queue.get_next_pending_job(TestRepo, scope, queue)
+      assert %Job{id: ^id} = Queue.get_next_runnable_job(TestRepo, scope, queue)
     end
 
     test "for multiple jobs with the same scheduled_at, preseance by sequence" do
@@ -125,46 +116,46 @@ defmodule Queuetopia.QueueTest do
 
       insert!(:job, scope: scope, queue: queue, scheduled_at: utc_now, sequence: 2)
 
-      assert %Job{id: ^id_1} = Queue.get_next_pending_job(TestRepo, scope, queue)
+      assert %Job{id: ^id_1} = Queue.get_next_runnable_job(TestRepo, scope, queue)
     end
 
     test "when the queue is empty, returns nil" do
       %{queue: queue, scope: scope} = insert!(:done_job)
 
-      assert is_nil(Queue.get_next_pending_job(TestRepo, scope, queue))
+      assert is_nil(Queue.get_next_runnable_job(TestRepo, scope, queue))
     end
 
     test "when the queue does not exist, returns nil" do
       %{queue: queue, scope: scope} = params_for(:job)
 
-      assert is_nil(Queue.get_next_pending_job(TestRepo, scope, queue))
+      assert is_nil(Queue.get_next_runnable_job(TestRepo, scope, queue))
     end
 
     test "when the next pending job is scheduled for later" do
       %Job{queue: queue, scope: scope} =
         insert!(:job, scheduled_at: utc_now() |> add(3600, :second))
 
-      assert is_nil(Queue.get_next_pending_job(TestRepo, scope, queue))
+      assert is_nil(Queue.get_next_runnable_job(TestRepo, scope, queue))
     end
 
     test "when the next pending job next attempt is scheduled for now" do
       %Job{queue: queue, scope: scope, id: id} = insert!(:job, next_attempt_at: utc_now())
 
-      assert %Job{id: ^id} = Queue.get_next_pending_job(TestRepo, scope, queue)
+      assert %Job{id: ^id} = Queue.get_next_runnable_job(TestRepo, scope, queue)
     end
 
     test "when the next pending job next attempt is scheduled for later" do
       %Job{queue: queue, scope: scope} =
         insert!(:job, next_attempt_at: utc_now() |> add(3600, :second))
 
-      assert is_nil(Queue.get_next_pending_job(TestRepo, scope, queue))
+      assert is_nil(Queue.get_next_runnable_job(TestRepo, scope, queue))
     end
 
     test "when max job attempts is reached, returns nil" do
       %Job{queue: queue, scope: scope} =
         insert!(:job, next_attempt_at: utc_now(), attempts: 20, max_attempts: 20)
 
-      assert is_nil(Queue.get_next_pending_job(TestRepo, scope, queue))
+      assert is_nil(Queue.get_next_runnable_job(TestRepo, scope, queue))
     end
   end
 
@@ -508,15 +499,15 @@ defmodule Queuetopia.QueueTest do
     end
   end
 
-  describe "scheduled_for_now?/1" do
+  describe "runnable_now?/1" do
     test "when the job is scheduled for now" do
       job = insert!(:job)
-      assert Queue.scheduled_for_now?(job)
+      assert Queue.runnable_now?(job)
     end
 
     test "when the job is done" do
       job = insert!(:job, scheduled_at: utc_now() |> add(3600, :second))
-      refute Queue.scheduled_for_now?(job)
+      refute Queue.runnable_now?(job)
     end
   end
 
