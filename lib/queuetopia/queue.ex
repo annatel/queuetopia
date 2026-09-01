@@ -3,7 +3,7 @@ defmodule Queuetopia.Queue do
 
   import Ecto.Query
 
-  alias Queuetopia.Queue.{Job, Lock}
+  alias Queuetopia.Queue.{Job, Lock, PendingQueue}
   alias Queuetopia.Queue.JobQueryable
 
   @lock_security_retention 1_000
@@ -59,9 +59,85 @@ defmodule Queuetopia.Queue do
 
   @spec create_job(map, module) :: {:error, Ecto.Changeset.t()} | {:ok, Job.t()}
   def create_job(attrs, repo) do
-    attrs
-    |> Job.create_changeset()
-    |> repo.insert()
+    Ecto.Multi.new()
+    |> Ecto.Multi.insert(:job, Job.create_changeset(attrs))
+    |> Ecto.Multi.run(:pending_queue, fn repo, %{job: job} ->
+      {:ok, upsert_pending_queue(repo, job)}
+    end)
+    |> repo.transaction()
+    |> case do
+      {:ok, %{job: job}} -> {:ok, job}
+      {:error, :job, %Ecto.Changeset{} = changeset, _} -> {:error, changeset}
+    end
+  end
+
+  defp upsert_pending_queue(repo, %Job{} = job) do
+    scheduled_at = DateTime.truncate(job.scheduled_at, :second)
+
+    on_conflict =
+      from(pq in PendingQueue,
+        update: [
+          set: [next_runnable_at: fragment("LEAST(next_runnable_at, ?)", ^scheduled_at)]
+        ]
+      )
+
+    %PendingQueue{}
+    |> PendingQueue.changeset(%{
+      scope: job.scope,
+      queue: job.queue,
+      next_runnable_at: scheduled_at
+    })
+    |> repo.insert!(upsert_opts(repo, on_conflict))
+  end
+
+  defp update_pending_queue_with_next_job!(repo, %Job{} = job) do
+    %PendingQueue{}
+    |> PendingQueue.changeset(%{
+      scope: job.scope,
+      queue: job.queue,
+      next_runnable_at: next_runnable_at(job)
+    })
+    |> repo.insert!(upsert_opts(repo, set: [next_runnable_at: next_runnable_at(job)]))
+  end
+
+  defp upsert_opts(repo, on_conflict) do
+    if repo.__adapter__() == Ecto.Adapters.MyXQL,
+      do: [on_conflict: on_conflict],
+      else: [on_conflict: on_conflict, conflict_target: [:scope, :queue]]
+  end
+
+  @doc false
+  @spec refresh_pending_queue!(module, binary, binary) :: :ok
+  def refresh_pending_queue!(repo, scope, queue) do
+    case head_pending_job(repo, scope, queue) do
+      nil ->
+        delete_pending_queue(repo, scope, queue)
+
+      %Job{} = job ->
+        update_pending_queue_with_next_job!(repo, job)
+    end
+
+    :ok
+  end
+
+  defp delete_pending_queue(repo, scope, queue) do
+    PendingQueue
+    |> where([pq], pq.scope == ^scope and pq.queue == ^queue)
+    |> repo.delete_all()
+  end
+
+  defp next_runnable_at(%Job{scheduled_at: scheduled_at, next_attempt_at: nil}),
+    do: DateTime.truncate(scheduled_at, :second)
+
+  defp next_runnable_at(%Job{scheduled_at: scheduled_at, next_attempt_at: next_attempt_at}),
+    do: [scheduled_at, next_attempt_at] |> Enum.max(DateTime) |> DateTime.truncate(:second)
+
+  defp head_pending_job(repo, scope, queue) do
+    JobQueryable.queryable()
+    |> JobQueryable.filter(scope: scope, queue: queue, available?: true)
+    |> JobQueryable.order_by(asc: :scheduled_at, asc: :sequence)
+    |> limit(1)
+    |> repo.one()
   end
 
   @doc """
@@ -158,18 +234,8 @@ defmodule Queuetopia.Queue do
   """
   @spec get_next_pending_job(module, binary, binary) :: Job.t() | nil
   def get_next_pending_job(repo, scope, queue) when is_binary(queue) do
-    job =
-      Job
-      |> where([j], j.queue == ^queue)
-      |> where([j], j.scope == ^scope)
-      |> where([j], is_nil(j.done_at))
-      |> where([j], j.attempts < j.max_attempts)
-      |> order_by(asc: :scheduled_at, asc: :sequence)
-      |> limit(1)
-      |> repo.one()
-
-    case job do
-      %Job{} -> if scheduled_for_now?(job), do: job, else: nil
+    case head_pending_job(repo, scope, queue) do
+      %Job{} = job -> if scheduled_for_now?(job), do: job, else: nil
       _ -> nil
     end
   end
@@ -236,6 +302,7 @@ defmodule Queuetopia.Queue do
       error: error
     })
     |> repo.update!()
+    |> tap(&refresh_pending_queue!(repo, &1.scope, &1.queue))
     |> tap(&performer.handle_failed_job!/1)
   end
 
@@ -250,6 +317,7 @@ defmodule Queuetopia.Queue do
       done_at: utc_now
     })
     |> repo.update!()
+    |> tap(&refresh_pending_queue!(repo, &1.scope, &1.queue))
   end
 
   defp resolve_performer(%Job{scope: scope}) do

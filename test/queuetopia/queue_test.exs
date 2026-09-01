@@ -4,6 +4,7 @@ defmodule Queuetopia.QueueTest do
   alias Queuetopia.Queue
   alias Queuetopia.Queue.Job
   alias Queuetopia.Queue.Lock
+  alias Queuetopia.Queue.PendingQueue
 
   describe "list_available_pending_queues/1" do
     test "returns available scoped queues with immediately executable job (first execution case)" do
@@ -721,6 +722,109 @@ defmodule Queuetopia.QueueTest do
       assert is_nil(TestRepo.get(Job, old_job_a.id))
       assert TestRepo.get(Job, old_job_b.id)
     end
+  end
+
+  describe "pending queues maintenance" do
+    test "create_job registers the queue as pending, runnable at the job's scheduled_at" do
+      params = params_for(:job)
+      attrs = job_attrs(params)
+
+      assert {:ok, %Job{}} = Queue.create_job(attrs, TestRepo)
+
+      assert %PendingQueue{next_runnable_at: next_runnable_at} =
+               get_pending_queue(params.scope, params.queue)
+
+      assert DateTime.compare(next_runnable_at, DateTime.truncate(params.scheduled_at, :second)) ==
+               :eq
+    end
+
+    test "create_job keeps the earliest next_runnable_at of the queue" do
+      utc_now = utc_now() |> DateTime.truncate(:second)
+      params = params_for(:job, scheduled_at: utc_now |> DateTime.add(3600))
+
+      {:ok, _} = Queue.create_job(job_attrs(params), TestRepo)
+
+      {:ok, _} =
+        Queue.create_job(
+          job_attrs(
+            params_for(:job, queue: params.queue, scope: params.scope, scheduled_at: utc_now)
+          ),
+          TestRepo
+        )
+
+      {:ok, _} =
+        Queue.create_job(
+          job_attrs(
+            params_for(:job,
+              queue: params.queue,
+              scope: params.scope,
+              scheduled_at: utc_now |> DateTime.add(7200)
+            )
+          ),
+          TestRepo
+        )
+
+      assert %PendingQueue{next_runnable_at: next_runnable_at} =
+               get_pending_queue(params.scope, params.queue)
+
+      assert DateTime.compare(next_runnable_at, utc_now) == :eq
+    end
+
+    test "a succeeded job moves next_runnable_at to the next job of the queue" do
+      utc_now = utc_now() |> DateTime.truncate(:second)
+      later = utc_now |> DateTime.add(3600)
+
+      job = insert!(:success_job, scope: Queuetopia.TestQueuetopia.scope(), scheduled_at: utc_now)
+      insert!(:job, scope: job.scope, queue: job.queue, scheduled_at: later)
+
+      Queue.persist_result!(TestRepo, job, :ok)
+
+      assert %PendingQueue{next_runnable_at: next_runnable_at} =
+               get_pending_queue(job.scope, job.queue)
+
+      assert DateTime.compare(next_runnable_at, later) == :eq
+    end
+
+    test "a succeeded last job removes the pending queue" do
+      job = insert!(:success_job, scope: Queuetopia.TestQueuetopia.scope())
+
+      Queue.persist_result!(TestRepo, job, :ok)
+
+      assert is_nil(get_pending_queue(job.scope, job.queue))
+    end
+
+    test "a failed job pushes next_runnable_at to its next attempt" do
+      job = insert!(:failure_job, scope: Queuetopia.TestQueuetopia.scope(), max_backoff: 60_000)
+
+      Queue.persist_result!(TestRepo, job, {:error, "error"})
+
+      %Job{next_attempt_at: next_attempt_at} = TestRepo.reload(job)
+
+      assert %PendingQueue{next_runnable_at: next_runnable_at} =
+               get_pending_queue(job.scope, job.queue)
+
+      assert DateTime.compare(next_runnable_at, next_attempt_at) == :eq
+    end
+  end
+
+  defp job_attrs(params) do
+    Map.take(params, [
+      :scope,
+      :queue,
+      :sequence,
+      :action,
+      :params,
+      :scheduled_at,
+      :timeout,
+      :max_backoff,
+      :max_attempts
+    ])
+  end
+
+  defp get_pending_queue(scope, queue) do
+    PendingQueue
+    |> Ecto.Query.where(scope: ^scope, queue: ^queue)
+    |> TestRepo.one()
   end
 
   defp all_locks(scope) do
