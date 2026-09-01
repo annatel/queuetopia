@@ -6,9 +6,9 @@ defmodule Queuetopia.Queue.PendingQueueQueryable do
 
   alias Queuetopia.Queue.Lock
 
-  @filterable_fields ~w(scope queue runnable_now? without_locked_queues)a
+  @filterable_fields ~w(scope queue ready? without_locked_queues)a
 
-  defp filter_by_field(queryable, {:runnable_now?, true}) do
+  defp filter_by_field(queryable, {:ready?, true}) do
     queryable |> where([pq], pq.next_runnable_at <= ^DateTime.utc_now())
   end
 

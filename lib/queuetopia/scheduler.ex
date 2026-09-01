@@ -4,7 +4,6 @@ defmodule Queuetopia.Scheduler do
   use GenServer
 
   alias Queuetopia.Queue
-  alias Queuetopia.Queue.Job
 
   @type option :: {:poll_interval, pos_integer()}
 
@@ -163,22 +162,19 @@ defmodule Queuetopia.Scheduler do
          repo,
          scope
        ) do
-    case Queue.get_next_runnable_job(repo, scope, queue) do
-      nil ->
+    case Queue.claim_next_runnable_job(repo, scope, queue) do
+      {:ok, job} ->
+        task = Task.Supervisor.async_nolink(task_supervisor_name, Queue, :perform, [job])
+
+        Process.send_after(self(), {:kill, task}, job.timeout)
+        {task.ref, job}
+
+      {:error, :no_runnable_job} ->
         Queue.refresh_pending_queue!(repo, scope, queue)
         nil
 
-      %Job{} = job ->
-        case Queue.fetch_job(repo, job) do
-          {:ok, job} ->
-            task = Task.Supervisor.async_nolink(task_supervisor_name, Queue, :perform, [job])
-
-            Process.send_after(self(), {:kill, task}, job.timeout)
-            {task.ref, job}
-
-          _ ->
-            nil
-        end
+      {:error, _} ->
+        nil
     end
   end
 end

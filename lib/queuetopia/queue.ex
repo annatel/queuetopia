@@ -191,7 +191,7 @@ defmodule Queuetopia.Queue do
     PendingQueueQueryable.queryable()
     |> PendingQueueQueryable.filter(
       scope: scope,
-      runnable_now?: true,
+      ready?: true,
       without_locked_queues: scope
     )
     |> select([pq], pq.queue)
@@ -217,29 +217,28 @@ defmodule Queuetopia.Queue do
   end
 
   @doc false
-  @spec fetch_job(module, Job.t()) :: {:error, any} | {:ok, any}
-  def fetch_job(repo, %Job{id: id} = job) do
+  @spec claim_next_runnable_job(module, binary, binary) ::
+          {:ok, Job.t()} | {:error, :locked | :no_runnable_job | :stale_job}
+  def claim_next_runnable_job(repo, scope, queue) do
     Ecto.Multi.new()
-    |> Ecto.Multi.run(:lock, fn _, _ ->
-      lock_queue(repo, job.scope, job.queue, job.timeout)
-    end)
-    |> Ecto.Multi.run(:job, fn _, _ ->
-      job = repo.get(Job, id)
-
-      with {:done?, false} <- {:done?, done?(job)},
-           {:max_attempts_reached?, false} <-
-             {:max_attempts_reached?, max_attempts_reached?(job)},
-           {:runnable_now?, true} <- {:runnable_now?, runnable_now?(job)} do
-        {:ok, job}
-      else
-        {:done?, true} -> {:error, "already done"}
-        {:max_attempts_reached?, true} -> {:error, "max attempts reached"}
-        {:runnable_now?, false} -> {:error, "scheduled for later"}
+    |> Ecto.Multi.run(:head, fn _, _ ->
+      case get_next_runnable_job(repo, scope, queue) do
+        %Job{} = job -> {:ok, job}
+        nil -> {:error, :no_runnable_job}
       end
+    end)
+    |> Ecto.Multi.run(:lock, fn _, %{head: head} ->
+      lock_queue(repo, scope, queue, head.timeout)
+    end)
+    |> Ecto.Multi.run(:job, fn _, %{head: head} ->
+      job = repo.get(Job, head.id)
+
+      if processable_now?(job), do: {:ok, job}, else: {:error, :stale_job}
     end)
     |> repo.transaction()
     |> case do
       {:ok, %{job: job}} -> {:ok, job}
+      {:error, :head, error, _} -> {:error, error}
       {:error, :lock, _, _} -> {:error, :locked}
       {:error, :job, error, _} -> {:error, error}
     end

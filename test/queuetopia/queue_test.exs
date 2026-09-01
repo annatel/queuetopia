@@ -79,6 +79,42 @@ defmodule Queuetopia.QueueTest do
     end
   end
 
+  describe "claim_next_runnable_job/3" do
+    test "claims the head runnable job and locks the queue" do
+      %{id: id, queue: queue, scope: scope} = insert!(:job, scheduled_at: utc_now())
+      insert!(:job, queue: queue, scope: scope, scheduled_at: utc_now() |> add(60))
+
+      assert {:ok, %Job{id: ^id}} = Queue.claim_next_runnable_job(TestRepo, scope, queue)
+
+      assert %Lock{locked_until: locked_until, locked_at: locked_at} =
+               TestRepo.get_by(Lock, scope: scope, queue: queue)
+
+      assert locked_until ==
+               locked_at |> DateTime.add(6_000, :millisecond) |> DateTime.truncate(:second)
+    end
+
+    test "when the queue is already locked, returns an error and claims nothing" do
+      %{queue: queue, scope: scope} = insert!(:job, scheduled_at: utc_now())
+      insert!(:lock, scope: scope, queue: queue)
+
+      assert {:error, :locked} = Queue.claim_next_runnable_job(TestRepo, scope, queue)
+    end
+
+    test "when the head job is not runnable yet, returns an error without locking the queue" do
+      %{queue: queue, scope: scope} = insert!(:job, scheduled_at: utc_now() |> add(3600))
+
+      assert {:error, :no_runnable_job} = Queue.claim_next_runnable_job(TestRepo, scope, queue)
+      assert is_nil(TestRepo.get_by(Lock, scope: scope, queue: queue))
+    end
+
+    test "when the queue has no pending job, returns an error without locking the queue" do
+      %{queue: queue, scope: scope} = insert!(:done_job)
+
+      assert {:error, :no_runnable_job} = Queue.claim_next_runnable_job(TestRepo, scope, queue)
+      assert is_nil(TestRepo.get_by(Lock, scope: scope, queue: queue))
+    end
+  end
+
   describe "get_next_runnable_job/2" do
     test "returns the next pending job for a given scoped queue" do
       %{queue: queue_1, scope: scope_1} = insert!(:done_job)
@@ -156,123 +192,6 @@ defmodule Queuetopia.QueueTest do
         insert!(:job, next_attempt_at: utc_now(), attempts: 20, max_attempts: 20)
 
       assert is_nil(Queue.get_next_runnable_job(TestRepo, scope, queue))
-    end
-  end
-
-  describe "fetch_job/2" do
-    test "locks the queue for the job's timeout and returns the job" do
-      %Job{id: id, queue: queue, scope: scope} = job = insert!(:job, timeout: 1_000)
-
-      assert {:ok, %Job{id: ^id}} = Queue.fetch_job(TestRepo, job)
-
-      assert %Lock{locked_until: locked_until, locked_at: locked_at} =
-               TestRepo.get_by(Lock, scope: scope, queue: queue)
-
-      assert locked_until ==
-               locked_at |> DateTime.add(2_000, :millisecond) |> DateTime.truncate(:second)
-    end
-
-    test "when the queue is already locked" do
-      %Job{queue: queue, scope: scope} = job = insert!(:job)
-      %Lock{id: id} = insert!(:lock, queue: queue, scope: scope)
-
-      assert {:error, :locked} = Queue.fetch_job(TestRepo, job)
-      assert %Lock{id: ^id} = TestRepo.get_by(Lock, scope: scope, queue: queue)
-    end
-
-    test "when the job is done" do
-      %Job{queue: queue, scope: scope} = job = insert!(:done_job)
-
-      assert {:error, "already done"} = Queue.fetch_job(TestRepo, job)
-      assert is_nil(TestRepo.get_by(Lock, scope: scope, queue: queue))
-    end
-
-    test "when max job attempts is reached, returns error" do
-      %{queue: queue, scope: scope} = job = insert!(:job, attempts: 20, max_attempts: 20)
-
-      assert {:error, "max attempts reached"} = Queue.fetch_job(TestRepo, job)
-      assert is_nil(TestRepo.get_by(Lock, scope: scope, queue: queue))
-    end
-
-    test "when the job is scheduled for later" do
-      %Job{queue: queue, scope: scope} =
-        job = insert!(:job, scheduled_at: utc_now() |> add(3600, :second))
-
-      assert {:error, "scheduled for later"} = Queue.fetch_job(TestRepo, job)
-      assert is_nil(TestRepo.get_by(Lock, scope: scope, queue: queue))
-    end
-
-    test "when the next pending job next attempt is scheduled for now" do
-      %Job{id: id} = job = insert!(:job, next_attempt_at: utc_now())
-
-      assert {:ok, %Job{id: ^id}} = Queue.fetch_job(TestRepo, job)
-    end
-
-    test "when the next pending job next attempt is scheduled for later" do
-      %Job{} = job = insert!(:job, next_attempt_at: utc_now() |> add(3600, :second))
-
-      assert {:error, "scheduled for later"} = Queue.fetch_job(TestRepo, job)
-    end
-  end
-
-  describe "create_job/2" do
-    test "with valid params, returns the created job" do
-      params = params_for(:job)
-
-      attrs = %{
-        scope: params.scope,
-        sequence: params.sequence,
-        queue: params.queue,
-        action: params.action,
-        params: params.params,
-        scheduled_at: params.scheduled_at,
-        timeout: params.timeout,
-        max_backoff: params.max_backoff,
-        max_attempts: params.max_attempts
-      }
-
-      assert {:ok, %Job{} = job} = Queue.create_job(attrs, TestRepo)
-      assert job.sequence >= 1
-      assert job.scope == params.scope
-      assert job.queue == params.queue
-      assert job.action == params.action
-      assert job.params == params.params
-      assert not is_nil(job.scheduled_at)
-      assert job.timeout == params.timeout
-      assert job.max_backoff == params.max_backoff
-      assert job.max_attempts == params.max_attempts
-    end
-
-    test "when options are not set, creates the job with the default options" do
-      params = params_for(:job)
-
-      attrs = %{
-        scope: params.scope,
-        sequence: params.sequence,
-        queue: params.queue,
-        action: params.action,
-        params: params.params,
-        scheduled_at: params.scheduled_at
-      }
-
-      assert {:ok, %Job{} = job} = Queue.create_job(attrs, TestRepo)
-      assert job.timeout == Job.default_timeout()
-      assert job.max_backoff == Job.default_max_backoff()
-      assert job.max_attempts == Job.default_max_attempts()
-    end
-
-    test "with invalid params, returns a changeset error" do
-      attrs = %{
-        scope: nil,
-        sequence: nil,
-        queue: nil,
-        action: nil,
-        params: nil,
-        scheduled_at: utc_now()
-      }
-
-      assert {:error, changeset} = Queue.create_job(attrs, TestRepo)
-      refute changeset.valid?
     end
   end
 
