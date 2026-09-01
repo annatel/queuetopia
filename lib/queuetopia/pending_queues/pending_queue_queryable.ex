@@ -1,10 +1,10 @@
-defmodule Queuetopia.Queue.PendingQueueQueryable do
+defmodule Queuetopia.PendingQueues.PendingQueueQueryable do
   use AntlUtilsEcto.Queryable,
-    base_schema: Queuetopia.Queue.PendingQueue
+    base_schema: Queuetopia.PendingQueues.PendingQueue
 
   import Ecto.Query
 
-  alias Queuetopia.Queue.Lock
+  alias Queuetopia.Locks.Lock
 
   @filterable_fields ~w(scope queue ready? without_locked_queues)a
 

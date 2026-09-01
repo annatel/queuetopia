@@ -1,7 +1,7 @@
-defmodule Queuetopia.Queue.PendingQueueTest do
+defmodule Queuetopia.PendingQueues.PendingQueueTest do
   use Queuetopia.DataCase
 
-  alias Queuetopia.Queue.PendingQueue
+  alias Queuetopia.PendingQueues.PendingQueue
 
   test "requires scope, queue and next_runnable_at" do
     changeset = PendingQueue.changeset(%PendingQueue{}, %{})

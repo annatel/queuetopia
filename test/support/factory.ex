@@ -1,8 +1,8 @@
 defmodule Queuetopia.Factory do
   use AntlUtilsEcto.Factory, repo: Queuetopia.TestRepo
 
-  alias Queuetopia.Queue.Job
-  alias Queuetopia.Queue.Lock
+  alias Queuetopia.Jobs.Job
+  alias Queuetopia.Locks.Lock
 
   def build(:lock, attrs) do
     locked_at = utc_now()
@@ -25,7 +25,7 @@ defmodule Queuetopia.Factory do
   end
 
   def build(:pending_queue, attrs) do
-    %Queuetopia.Queue.PendingQueue{
+    %Queuetopia.PendingQueues.PendingQueue{
       scope: "scope_#{System.unique_integer([:positive])}",
       queue: "queue_#{System.unique_integer([:positive])}",
       next_runnable_at: utc_now() |> DateTime.truncate(:second)

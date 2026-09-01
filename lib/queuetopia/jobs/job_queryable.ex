@@ -1,6 +1,6 @@
-defmodule Queuetopia.Queue.JobQueryable do
+defmodule Queuetopia.Jobs.JobQueryable do
   use AntlUtilsEcto.Queryable,
-    base_schema: Queuetopia.Queue.Job,
+    base_schema: Queuetopia.Jobs.Job,
     searchable_fields: [:scope, :queue, :action, :params]
 
   import Ecto.Query

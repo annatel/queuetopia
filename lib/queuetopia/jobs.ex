@@ -1,13 +1,12 @@
-defmodule Queuetopia.Queue do
+defmodule Queuetopia.Jobs do
   @moduledoc false
 
   import Ecto.Query
 
-  alias Queuetopia.Queue.{Job, Lock, PendingQueue}
-  alias Queuetopia.Queue.JobQueryable
-  alias Queuetopia.Queue.PendingQueueQueryable
-
-  @lock_security_retention 1_000
+  alias Queuetopia.Jobs.Job
+  alias Queuetopia.Locks
+  alias Queuetopia.PendingQueues
+  alias Queuetopia.Jobs.JobQueryable
 
   @type list_options :: [option] | []
 
@@ -63,7 +62,7 @@ defmodule Queuetopia.Queue do
     Ecto.Multi.new()
     |> Ecto.Multi.insert(:job, Job.create_changeset(attrs))
     |> Ecto.Multi.run(:pending_queue, fn repo, %{job: job} ->
-      {:ok, upsert_pending_queue(repo, job)}
+      {:ok, PendingQueues.upsert_pending_queue(repo, job)}
     end)
     |> repo.transaction()
     |> case do
@@ -72,68 +71,9 @@ defmodule Queuetopia.Queue do
     end
   end
 
-  defp upsert_pending_queue(repo, %Job{} = job) do
-    scheduled_at = DateTime.truncate(job.scheduled_at, :second)
-
-    on_conflict =
-      from(pq in PendingQueue,
-        update: [
-          set: [next_runnable_at: fragment("LEAST(next_runnable_at, ?)", ^scheduled_at)]
-        ]
-      )
-
-    %PendingQueue{}
-    |> PendingQueue.changeset(%{
-      scope: job.scope,
-      queue: job.queue,
-      next_runnable_at: scheduled_at
-    })
-    |> repo.insert!(upsert_opts(repo, on_conflict))
-  end
-
-  defp update_pending_queue_with_next_job!(repo, %Job{} = job) do
-    %PendingQueue{}
-    |> PendingQueue.changeset(%{
-      scope: job.scope,
-      queue: job.queue,
-      next_runnable_at: next_runnable_at(job)
-    })
-    |> repo.insert!(upsert_opts(repo, set: [next_runnable_at: next_runnable_at(job)]))
-  end
-
-  defp upsert_opts(repo, on_conflict) do
-    if repo.__adapter__() == Ecto.Adapters.MyXQL,
-      do: [on_conflict: on_conflict],
-      else: [on_conflict: on_conflict, conflict_target: [:scope, :queue]]
-  end
-
   @doc false
-  @spec refresh_pending_queue!(module, binary, binary) :: :ok
-  def refresh_pending_queue!(repo, scope, queue) do
-    case head_pending_job(repo, scope, queue) do
-      nil ->
-        delete_pending_queue(repo, scope, queue)
-
-      %Job{} = job ->
-        update_pending_queue_with_next_job!(repo, job)
-    end
-
-    :ok
-  end
-
-  defp delete_pending_queue(repo, scope, queue) do
-    PendingQueue
-    |> where([pq], pq.scope == ^scope and pq.queue == ^queue)
-    |> repo.delete_all()
-  end
-
-  defp next_runnable_at(%Job{scheduled_at: scheduled_at, next_attempt_at: nil}),
-    do: DateTime.truncate(scheduled_at, :second)
-
-  defp next_runnable_at(%Job{scheduled_at: scheduled_at, next_attempt_at: next_attempt_at}),
-    do: [scheduled_at, next_attempt_at] |> Enum.max(DateTime) |> DateTime.truncate(:second)
-
-  defp head_pending_job(repo, scope, queue) do
+  @spec head_pending_job(module, binary, binary) :: Job.t() | nil
+  def head_pending_job(repo, scope, queue) do
     JobQueryable.queryable()
     |> JobQueryable.filter(scope: scope, queue: queue, available?: true)
     |> JobQueryable.order_by(asc: :scheduled_at, asc: :sequence)
@@ -160,33 +100,8 @@ defmodule Queuetopia.Queue do
   end
 
   @doc """
-  List the available pending queues by scope a.k.a by Queuetopia.
-
-  The queues come from the queuetopia_pending_queues table.
-  """
-  @spec list_available_pending_queues(module, binary, keyword()) :: [binary]
-  def list_available_pending_queues(repo, scope, opts \\ []) do
-    limit = Keyword.get(opts, :limit)
-
-    PendingQueueQueryable.queryable()
-    |> PendingQueueQueryable.filter(
-      scope: scope,
-      ready?: true,
-      without_locked_queues: scope
-    )
-    |> select([pq], pq.queue)
-    |> query_limit(limit)
-    |> repo.all()
-  end
-
-  defp query_limit(query, limit) when is_integer(limit),
-    do: query |> limit(^limit) |> order_by(asc: fragment("RAND()"))
-
-  defp query_limit(query, nil), do: query
-
-  @doc """
-  Get the next available pending job of a given queue by scope a.k.a by Queuetopia.
-  If the queue is empty or the next pendign job is scheduled for later, returns nil.
+  Get the next runnable job of a given queue by scope a.k.a by Queuetopia.
+  If the queue is empty or the next pending job is scheduled for later, returns nil.
   """
   @spec get_next_runnable_job(module, binary, binary) :: Job.t() | nil
   def get_next_runnable_job(repo, scope, queue) when is_binary(queue) do
@@ -208,7 +123,7 @@ defmodule Queuetopia.Queue do
       end
     end)
     |> Ecto.Multi.run(:lock, fn _, %{head: head} ->
-      lock_queue(repo, scope, queue, head.timeout)
+      Locks.lock_queue(repo, scope, queue, head.timeout)
     end)
     |> Ecto.Multi.run(:job, fn _, %{head: head} ->
       job = repo.get(Job, head.id)
@@ -257,7 +172,7 @@ defmodule Queuetopia.Queue do
       error: error
     })
     |> repo.update!()
-    |> tap(&refresh_pending_queue!(repo, &1.scope, &1.queue))
+    |> tap(&PendingQueues.refresh_pending_queue!(repo, &1.scope, &1.queue))
     |> tap(&performer.handle_failed_job!/1)
   end
 
@@ -272,52 +187,12 @@ defmodule Queuetopia.Queue do
       done_at: utc_now
     })
     |> repo.update!()
-    |> tap(&refresh_pending_queue!(repo, &1.scope, &1.queue))
+    |> tap(&PendingQueues.refresh_pending_queue!(repo, &1.scope, &1.queue))
   end
 
   defp resolve_performer(%Job{scope: scope}) do
     (String.split(scope, ".") ++ ["Performer"])
     |> Module.safe_concat()
-  end
-
-  defp lock_queue(repo, scope, queue, timeout)
-       when is_binary(queue) and is_integer(timeout) do
-    utc_now = DateTime.utc_now()
-    lock_retention = timeout + @lock_security_retention
-
-    %Lock{}
-    |> Lock.changeset(%{
-      scope: scope,
-      queue: queue,
-      locked_at: utc_now,
-      locked_by_node: Kernel.inspect(Node.self()),
-      locked_until: DateTime.add(utc_now, lock_retention, :millisecond)
-    })
-    |> repo.insert()
-    |> case do
-      {:ok, %Lock{} = lock} -> {:ok, lock}
-      {:error, _changeset} -> {:error, :locked}
-    end
-  end
-
-  @doc false
-  @spec release_expired_locks(module, binary) :: any()
-  def release_expired_locks(repo, scope) do
-    utc_now = DateTime.utc_now()
-
-    Lock
-    |> where([lock], lock.scope == ^scope)
-    |> where([lock], lock.locked_until <= ^utc_now)
-    |> repo.delete_all()
-  end
-
-  @doc false
-  @spec unlock_queue(module, binary, binary) :: any
-  def unlock_queue(repo, scope, queue) do
-    Lock
-    |> where([lock], lock.scope == ^scope)
-    |> where([lock], lock.queue == ^queue)
-    |> repo.delete_all()
   end
 
   @doc false

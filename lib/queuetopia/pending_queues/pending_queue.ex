@@ -1,4 +1,4 @@
-defmodule Queuetopia.Queue.PendingQueue do
+defmodule Queuetopia.PendingQueues.PendingQueue do
   @moduledoc false
 
   use Ecto.Schema

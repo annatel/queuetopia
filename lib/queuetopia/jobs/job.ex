@@ -1,4 +1,4 @@
-defmodule Queuetopia.Queue.Job do
+defmodule Queuetopia.Jobs.Job do
   @moduledoc false
 
   use Ecto.Schema

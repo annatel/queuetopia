@@ -1,5 +1,5 @@
 defmodule Queuetopia.Factories do
-  alias Queuetopia.Queue.Job
+  alias Queuetopia.Jobs.Job
 
   def build(:job, attrs) do
     %Job{

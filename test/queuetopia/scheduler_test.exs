@@ -1,8 +1,9 @@
 defmodule Queuetopia.SchedulerTest do
   use Queuetopia.DataCase
 
-  alias Queuetopia.Queue
-  alias Queuetopia.Queue.{Job, Lock}
+  alias Queuetopia.Jobs
+  alias Queuetopia.Jobs.Job
+  alias Queuetopia.Locks.Lock
   alias Queuetopia.TestRepo
   alias Queuetopia.TestQueuetopia
 
@@ -178,7 +179,7 @@ defmodule Queuetopia.SchedulerTest do
 
     %{queue: queue} = insert!(:job, scope: scope, scheduled_at: later)
 
-    TestRepo.insert!(%Queuetopia.Queue.PendingQueue{
+    TestRepo.insert!(%Queuetopia.PendingQueues.PendingQueue{
       scope: scope,
       queue: queue,
       next_runnable_at: utc_now
@@ -189,7 +190,7 @@ defmodule Queuetopia.SchedulerTest do
     :sys.get_state(TestQueuetopia.Scheduler)
 
     assert %{next_runnable_at: ^later} =
-             TestRepo.get_by(Queuetopia.Queue.PendingQueue, scope: scope, queue: queue)
+             TestRepo.get_by(Queuetopia.PendingQueues.PendingQueue, scope: scope, queue: queue)
 
     refute_receive {^queue, _, _}, 100
   end
@@ -369,7 +370,7 @@ defmodule Queuetopia.SchedulerTest do
                attempted_by: attempted_by,
                attempts: attempts,
                error: "error"
-             } = Queue.get_next_runnable_job(TestRepo, scope, queue)
+             } = Jobs.get_next_runnable_job(TestRepo, scope, queue)
 
       assert attempts > 0
       refute is_nil(attempted_at)
@@ -400,7 +401,7 @@ defmodule Queuetopia.SchedulerTest do
                attempted_by: attempted_by,
                attempts: attempts,
                error: "job_timeout"
-             } = Queue.get_next_runnable_job(TestRepo, scope, queue)
+             } = Jobs.get_next_runnable_job(TestRepo, scope, queue)
 
       assert attempts > 0
       refute is_nil(attempted_at)
@@ -434,7 +435,7 @@ defmodule Queuetopia.SchedulerTest do
                attempted_by: attempted_by,
                attempts: attempts,
                error: error
-             } = Queue.get_next_runnable_job(TestRepo, scope, queue)
+             } = Jobs.get_next_runnable_job(TestRepo, scope, queue)
 
       assert attempts > 0
       refute is_nil(attempted_at)
