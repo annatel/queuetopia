@@ -93,6 +93,13 @@ defmodule Queuetopia.QueueTest do
                locked_at |> DateTime.add(6_000, :millisecond) |> DateTime.truncate(:second)
     end
 
+    test "when the queue has an expired lock, still returns an error" do
+      %{queue: queue, scope: scope} = insert!(:job, scheduled_at: utc_now())
+      insert!(:expired_lock, scope: scope, queue: queue)
+
+      assert {:error, :locked} = Queue.claim_next_runnable_job(TestRepo, scope, queue)
+    end
+
     test "when the queue is already locked, returns an error and claims nothing" do
       %{queue: queue, scope: scope} = insert!(:job, scheduled_at: utc_now())
       insert!(:lock, scope: scope, queue: queue)
@@ -372,64 +379,6 @@ defmodule Queuetopia.QueueTest do
     end
   end
 
-  describe "processable_now?/1" do
-    test "when the job is processable now" do
-      job = insert!(:job)
-      assert Queue.processable_now?(job)
-    end
-
-    test "when the job is done" do
-      job = insert!(:done_job)
-      refute Queue.processable_now?(job)
-    end
-
-    test "when max job attempts is reached, returns false" do
-      job = insert!(:job, attempts: 10, max_attempts: 10)
-      refute Queue.processable_now?(job)
-    end
-
-    test "when the job is scheduled for later" do
-      job = insert!(:job, scheduled_at: utc_now() |> add(3600, :second))
-      refute Queue.processable_now?(job)
-    end
-  end
-
-  describe "done?/1" do
-    test "when the job is not done" do
-      job = insert!(:job)
-      refute Queue.done?(job)
-    end
-
-    test "when the job is done" do
-      job = insert!(:done_job)
-      assert Queue.done?(job)
-    end
-  end
-
-  describe "max_attempts_reached?/1" do
-    test "when the max job attempts is not reached, returns false" do
-      job = insert!(:job)
-      refute Queue.max_attempts_reached?(job)
-    end
-
-    test "when the max job attempts is reached, returns true" do
-      job = insert!(:job, attempts: 10, max_attempts: 10)
-      assert Queue.max_attempts_reached?(job)
-    end
-  end
-
-  describe "runnable_now?/1" do
-    test "when the job is scheduled for now" do
-      job = insert!(:job)
-      assert Queue.runnable_now?(job)
-    end
-
-    test "when the job is done" do
-      job = insert!(:job, scheduled_at: utc_now() |> add(3600, :second))
-      refute Queue.runnable_now?(job)
-    end
-  end
-
   test "release_expired_locks/2" do
     %Lock{id: id, scope: scope} = insert!(:lock)
     %Lock{} = insert!(:expired_lock, scope: scope)
@@ -437,27 +386,6 @@ defmodule Queuetopia.QueueTest do
     assert all_locks(scope) |> Enum.count() == 2
     assert {1, nil} = Queue.release_expired_locks(TestRepo, scope)
     assert [%Lock{id: ^id}] = all_locks(scope)
-  end
-
-  describe "lock_queue/2" do
-    test "when the queue is available, locks it" do
-      %{queue: queue, scope: scope} = params_for(:lock)
-
-      assert {:ok, %Lock{queue: ^queue, scope: ^scope}} =
-               Queue.lock_queue(TestRepo, scope, queue, 1_000)
-    end
-
-    test "when the queue is locked, returns an error" do
-      %Lock{queue: queue, scope: scope} = insert!(:lock)
-
-      assert {:error, :locked} = Queue.lock_queue(TestRepo, scope, queue, 1_000)
-    end
-
-    test "althought the lock is expired, if it exists, returns an error" do
-      %Lock{queue: queue, scope: scope} = insert!(:expired_lock)
-
-      assert {:error, :locked} = Queue.lock_queue(TestRepo, scope, queue, 1_000)
-    end
   end
 
   test "unlock_queue/1 removes the queue's lock" do

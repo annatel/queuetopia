@@ -141,39 +141,19 @@ defmodule Queuetopia.Queue do
     |> repo.one()
   end
 
-  @doc """
-  Returns true if a job scheduled date is reached and the job is not done yet.
-  Otherwise, returns false.
-  """
-  @spec processable_now?(Job.t()) :: boolean
-  def processable_now?(%Job{} = job) do
-    not done?(job) and not max_attempts_reached?(job) and runnable_now?(job)
+  defp runnable_now?(%Job{} = job) do
+    not done?(job) and not max_attempts_reached?(job) and scheduled_date_reached?(job)
   end
 
-  @doc """
-  Returns true if a job is done.
-  Otherwise, returns false.
-  """
-  @spec done?(Job.t()) :: boolean
-  def done?(%Job{} = job) do
+  defp done?(%Job{} = job) do
     not is_nil(job.done_at)
   end
 
-  @doc """
-  Returns true if max job attempts is reached.
-  Otherwise, returns false.
-  """
-  @spec max_attempts_reached?(Job.t()) :: boolean
-  def max_attempts_reached?(%Job{} = job) do
+  defp max_attempts_reached?(%Job{} = job) do
     job.attempts >= job.max_attempts
   end
 
-  @doc """
-  Returns true if a job scheduled date is reached.
-  Otherwise, returns false.
-  """
-  @spec runnable_now?(Job.t()) :: boolean
-  def runnable_now?(%Job{} = job) do
+  defp scheduled_date_reached?(%Job{} = job) do
     DateTime.compare(job.scheduled_at, DateTime.utc_now()) in [:eq, :lt] and
       (is_nil(job.next_attempt_at) or
          DateTime.compare(job.next_attempt_at, DateTime.utc_now()) in [:eq, :lt])
@@ -233,7 +213,7 @@ defmodule Queuetopia.Queue do
     |> Ecto.Multi.run(:job, fn _, %{head: head} ->
       job = repo.get(Job, head.id)
 
-      if processable_now?(job), do: {:ok, job}, else: {:error, :stale_job}
+      if runnable_now?(job), do: {:ok, job}, else: {:error, :stale_job}
     end)
     |> repo.transaction()
     |> case do
@@ -300,10 +280,8 @@ defmodule Queuetopia.Queue do
     |> Module.safe_concat()
   end
 
-  @doc false
-  @spec lock_queue(module, binary, binary, integer()) :: {:error, :locked} | {:ok, Lock.t()}
-  def lock_queue(repo, scope, queue, timeout)
-      when is_binary(queue) and is_integer(timeout) do
+  defp lock_queue(repo, scope, queue, timeout)
+       when is_binary(queue) and is_integer(timeout) do
     utc_now = DateTime.utc_now()
     lock_retention = timeout + @lock_security_retention
 
