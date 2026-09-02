@@ -112,4 +112,17 @@ defmodule Queuetopia.JobCleanerTest do
     :timer.sleep(100)
     assert TestRepo.get(Job, eight_days_old_job.id), "Job should still exist before initial delay"
   end
+
+  test "the cleanup cycle reconciles the pending queues" do
+    %{scope: scope, queue: queue} = insert!(:job, scope: TestQueuetopia.scope())
+
+    start_supervised!(
+      {TestQueuetopia, cleanup_interval: {100, :millisecond}, job_cleaner_max_initial_delay: 0}
+    )
+
+    :timer.sleep(150)
+
+    assert %Queuetopia.PendingQueues.PendingQueue{} =
+             TestRepo.get_by(Queuetopia.PendingQueues.PendingQueue, scope: scope, queue: queue)
+  end
 end

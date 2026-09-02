@@ -60,6 +60,9 @@ defmodule Queuetopia.Jobs do
   @spec create_job(map, module) :: {:error, Ecto.Changeset.t()} | {:ok, Job.t()}
   def create_job(attrs, repo) do
     Ecto.Multi.new()
+    |> Ecto.Multi.run(:lock_pending_queue, fn repo, _ ->
+      {:ok, PendingQueues.lock_pending_queue(repo, attrs[:scope], attrs[:queue])}
+    end)
     |> Ecto.Multi.insert(:job, Job.create_changeset(attrs))
     |> Ecto.Multi.run(:pending_queue, fn repo, %{job: job} ->
       {:ok, PendingQueues.upsert_pending_queue(repo, job)}
@@ -72,8 +75,8 @@ defmodule Queuetopia.Jobs do
   end
 
   @doc false
-  @spec head_pending_job(module, binary, binary) :: Job.t() | nil
-  def head_pending_job(repo, scope, queue) do
+  @spec get_next_job(module, binary, binary) :: Job.t() | nil
+  def get_next_job(repo, scope, queue) do
     JobQueryable.queryable()
     |> JobQueryable.filter(scope: scope, queue: queue, available?: true)
     |> JobQueryable.order_by(asc: :scheduled_at, asc: :sequence)
@@ -81,17 +84,21 @@ defmodule Queuetopia.Jobs do
     |> repo.one()
   end
 
-  defp runnable_now?(%Job{} = job) do
+  defp performable_now?(%Job{} = job) do
     not done?(job) and not max_attempts_reached?(job) and scheduled_date_reached?(job)
   end
 
-  defp done?(%Job{} = job) do
-    not is_nil(job.done_at)
-  end
+  @doc false
+  @spec next_performable_at(Job.t()) :: DateTime.t()
+  def next_performable_at(%Job{scheduled_at: scheduled_at, next_attempt_at: nil}),
+    do: DateTime.truncate(scheduled_at, :second)
 
-  defp max_attempts_reached?(%Job{} = job) do
-    job.attempts >= job.max_attempts
-  end
+  def next_performable_at(%Job{scheduled_at: scheduled_at, next_attempt_at: next_attempt_at}),
+    do: [scheduled_at, next_attempt_at] |> Enum.max(DateTime) |> DateTime.truncate(:second)
+
+  defp done?(%Job{} = job), do: not is_nil(job.done_at)
+
+  defp max_attempts_reached?(%Job{} = job), do: job.attempts >= job.max_attempts
 
   defp scheduled_date_reached?(%Job{} = job) do
     DateTime.compare(job.scheduled_at, DateTime.utc_now()) in [:eq, :lt] and
@@ -99,44 +106,25 @@ defmodule Queuetopia.Jobs do
          DateTime.compare(job.next_attempt_at, DateTime.utc_now()) in [:eq, :lt])
   end
 
-  @doc """
-  Get the next runnable job of a given queue by scope a.k.a by Queuetopia.
-  If the queue is empty or the next pending job is scheduled for later, returns nil.
-  """
-  @spec get_next_runnable_job(module, binary, binary) :: Job.t() | nil
-  def get_next_runnable_job(repo, scope, queue) when is_binary(queue) do
-    case head_pending_job(repo, scope, queue) do
-      %Job{} = job -> if runnable_now?(job), do: job, else: nil
-      _ -> nil
-    end
-  end
-
   @doc false
-  @spec claim_next_runnable_job(module, binary, binary) ::
-          {:ok, Job.t()} | {:error, :locked | :no_runnable_job | :stale_job}
-  def claim_next_runnable_job(repo, scope, queue) do
-    Ecto.Multi.new()
-    |> Ecto.Multi.run(:head, fn _, _ ->
-      case get_next_runnable_job(repo, scope, queue) do
-        %Job{} = job -> {:ok, job}
-        nil -> {:error, :no_runnable_job}
-      end
-    end)
-    |> Ecto.Multi.run(:lock, fn _, %{head: head} ->
-      Locks.lock_queue(repo, scope, queue, head.timeout)
-    end)
-    |> Ecto.Multi.run(:job, fn _, %{head: head} ->
-      job = repo.get(Job, head.id)
+  @spec acquire_next_performable_job(module, binary, binary) ::
+          {:ok, Job.t()} | {:error, :locked | :no_performable_job}
+  def acquire_next_performable_job(repo, scope, queue) do
+    {:ok, result} =
+      repo.transaction(fn ->
+        PendingQueues.lock_pending_queue(repo, scope, queue)
 
-      if runnable_now?(job), do: {:ok, job}, else: {:error, :stale_job}
-    end)
-    |> repo.transaction()
-    |> case do
-      {:ok, %{job: job}} -> {:ok, job}
-      {:error, :head, error, _} -> {:error, error}
-      {:error, :lock, _, _} -> {:error, :locked}
-      {:error, :job, error, _} -> {:error, error}
-    end
+        with %Job{} = job <- get_next_job(repo, scope, queue),
+             true <- performable_now?(job),
+             {:ok, _lock} <- Locks.lock_queue(repo, scope, queue, job.timeout) do
+          {:ok, job}
+        else
+          {:error, :locked} -> {:error, :locked}
+          _ -> {:error, :no_performable_job}
+        end
+      end)
+
+    result
   end
 
   @doc false
@@ -149,43 +137,51 @@ defmodule Queuetopia.Jobs do
   @doc false
   @spec persist_result!(module, Job.t(), {:error, any} | :ok | {:ok, any}) :: Job.t()
 
-  def persist_result!(repo, %Job{} = job, {:ok, _res}), do: persist_success!(repo, job)
-  def persist_result!(repo, %Job{} = job, :ok), do: persist_success!(repo, job)
+  def persist_result!(repo, %Job{} = job, result) do
+    case normalize_result(result) do
+      :success -> persist_success!(repo, job)
+      {:failure, error} -> persist_failure!(repo, job, error)
+    end
+  end
 
-  def persist_result!(repo, %Job{} = job, {:error, error}) when is_binary(error),
-    do: persist_failure!(repo, job, error)
+  defp normalize_result(:ok), do: :success
+  defp normalize_result({:ok, _res}), do: :success
+  defp normalize_result({:error, error}) when is_binary(error), do: {:failure, error}
+  defp normalize_result(unexpected_response), do: {:failure, inspect(unexpected_response)}
 
-  def persist_result!(repo, %Job{} = job, unexpected_response),
-    do: persist_failure!(repo, job, inspect(unexpected_response))
-
-  defp persist_failure!(repo, %Job{} = job, error) do
-    utc_now = DateTime.utc_now() |> DateTime.truncate(:second)
-    performer = resolve_performer(job)
-    backoff = performer.backoff(job)
+  defp persist_success!(repo, %Job{} = job) do
+    attrs = attempt_attrs(job)
 
     job
-    |> Job.failed_job_changeset(%{
-      attempts: job.attempts + 1,
-      attempted_at: utc_now,
-      attempted_by: Atom.to_string(Node.self()),
-      next_attempt_at: utc_now |> DateTime.add(backoff, :millisecond),
-      error: error
-    })
-    |> repo.update!()
-    |> tap(&PendingQueues.refresh_pending_queue!(repo, &1.scope, &1.queue))
+    |> Job.succeeded_job_changeset(Map.put(attrs, :done_at, attrs.attempted_at))
+    |> update_job_and_refresh_pending_queue!(repo)
+  end
+
+  defp persist_failure!(repo, %Job{} = job, error) do
+    performer = resolve_performer(job)
+    attrs = attempt_attrs(job)
+
+    job
+    |> Job.failed_job_changeset(
+      Map.merge(attrs, %{
+        next_attempt_at: DateTime.add(attrs.attempted_at, performer.backoff(job), :millisecond),
+        error: error
+      })
+    )
+    |> update_job_and_refresh_pending_queue!(repo)
     |> tap(&performer.handle_failed_job!/1)
   end
 
-  defp persist_success!(repo, %Job{} = job) do
-    utc_now = DateTime.utc_now() |> DateTime.truncate(:second)
-
-    job
-    |> Job.succeeded_job_changeset(%{
+  defp attempt_attrs(%Job{} = job) do
+    %{
       attempts: job.attempts + 1,
-      attempted_at: utc_now,
-      attempted_by: Atom.to_string(Node.self()),
-      done_at: utc_now
-    })
+      attempted_at: DateTime.utc_now() |> DateTime.truncate(:second),
+      attempted_by: Atom.to_string(Node.self())
+    }
+  end
+
+  defp update_job_and_refresh_pending_queue!(changeset, repo) do
+    changeset
     |> repo.update!()
     |> tap(&PendingQueues.refresh_pending_queue!(repo, &1.scope, &1.queue))
   end
@@ -200,11 +196,8 @@ defmodule Queuetopia.Jobs do
     {duration, unit} = job_retention
     cutoff_date = DateTime.utc_now() |> DateTime.add(-duration, unit)
 
-    from(j in Job,
-      where: j.scope == ^scope,
-      where: not is_nil(j.done_at),
-      where: j.done_at < ^cutoff_date
-    )
+    JobQueryable.queryable()
+    |> JobQueryable.filter(scope: scope, done_before: cutoff_date)
     |> repo.delete_all()
   end
 end

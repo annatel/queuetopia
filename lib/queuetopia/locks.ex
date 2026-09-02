@@ -1,9 +1,8 @@
 defmodule Queuetopia.Locks do
   @moduledoc false
 
-  import Ecto.Query
-
   alias Queuetopia.Locks.Lock
+  alias Queuetopia.Locks.LockQueryable
 
   @lock_security_retention 1_000
 
@@ -32,20 +31,16 @@ defmodule Queuetopia.Locks do
   @doc false
   @spec release_expired_locks(module, binary) :: any()
   def release_expired_locks(repo, scope) do
-    utc_now = DateTime.utc_now()
-
-    Lock
-    |> where([lock], lock.scope == ^scope)
-    |> where([lock], lock.locked_until <= ^utc_now)
+    LockQueryable.queryable()
+    |> LockQueryable.filter(scope: scope, expired?: true)
     |> repo.delete_all()
   end
 
   @doc false
   @spec unlock_queue(module, binary, binary) :: any
   def unlock_queue(repo, scope, queue) do
-    Lock
-    |> where([lock], lock.scope == ^scope)
-    |> where([lock], lock.queue == ^queue)
+    LockQueryable.queryable()
+    |> LockQueryable.filter(scope: scope, queue: queue)
     |> repo.delete_all()
   end
 end

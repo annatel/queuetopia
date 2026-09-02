@@ -1,7 +1,6 @@
 defmodule Queuetopia.SchedulerTest do
   use Queuetopia.DataCase
 
-  alias Queuetopia.Jobs
   alias Queuetopia.Jobs.Job
   alias Queuetopia.Locks.Lock
   alias Queuetopia.TestRepo
@@ -172,7 +171,7 @@ defmodule Queuetopia.SchedulerTest do
     assert_receive {^queue, _, :started}, 2_000
   end
 
-  test "refreshes a polled queue whose head job is not runnable yet" do
+  test "refreshes a polled queue whose head job is not performable yet" do
     scope = TestQueuetopia.scope()
     utc_now = DateTime.utc_now() |> DateTime.truncate(:second)
     later = utc_now |> DateTime.add(3600)
@@ -182,14 +181,14 @@ defmodule Queuetopia.SchedulerTest do
     TestRepo.insert!(%Queuetopia.PendingQueues.PendingQueue{
       scope: scope,
       queue: queue,
-      next_runnable_at: utc_now
+      next_performable_at: utc_now
     })
 
     start_supervised!({TestQueuetopia, poll_interval: 5_000})
 
     :sys.get_state(TestQueuetopia.Scheduler)
 
-    assert %{next_runnable_at: ^later} =
+    assert %{next_performable_at: ^later} =
              TestRepo.get_by(Queuetopia.PendingQueues.PendingQueue, scope: scope, queue: queue)
 
     refute_receive {^queue, _, _}, 100
@@ -370,7 +369,7 @@ defmodule Queuetopia.SchedulerTest do
                attempted_by: attempted_by,
                attempts: attempts,
                error: "error"
-             } = Jobs.get_next_runnable_job(TestRepo, scope, queue)
+             } = TestRepo.get(Job, failing_job_id)
 
       assert attempts > 0
       refute is_nil(attempted_at)
@@ -401,7 +400,7 @@ defmodule Queuetopia.SchedulerTest do
                attempted_by: attempted_by,
                attempts: attempts,
                error: "job_timeout"
-             } = Jobs.get_next_runnable_job(TestRepo, scope, queue)
+             } = TestRepo.get(Job, slow_job_id)
 
       assert attempts > 0
       refute is_nil(attempted_at)
@@ -415,7 +414,6 @@ defmodule Queuetopia.SchedulerTest do
 
       %{
         id: raising_job_id,
-        scope: scope,
         queue: queue,
         attempts: 0,
         attempted_at: nil,
@@ -435,7 +433,7 @@ defmodule Queuetopia.SchedulerTest do
                attempted_by: attempted_by,
                attempts: attempts,
                error: error
-             } = Jobs.get_next_runnable_job(TestRepo, scope, queue)
+             } = TestRepo.get(Job, raising_job_id)
 
       assert attempts > 0
       refute is_nil(attempted_at)

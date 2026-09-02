@@ -7,19 +7,19 @@ defmodule Queuetopia.Migrations.V8 do
     create_if_not_exists table(:queuetopia_pending_queues, primary_key: false) do
       add(:scope, :string, null: false, primary_key: true)
       add(:queue, :string, null: false, primary_key: true)
-      add(:next_runnable_at, :utc_datetime, null: false)
+      add(:next_performable_at, :utc_datetime, null: false)
 
       timestamps()
     end
 
     create(
-      index(:queuetopia_pending_queues, [:scope, :next_runnable_at, :queue],
-        name: :queuetopia_pending_queues_runnable_index
+      index(:queuetopia_pending_queues, [:scope, :next_performable_at, :queue],
+        name: :queuetopia_pending_queues_performable_index
       )
     )
 
     execute("""
-    INSERT INTO queuetopia_pending_queues (scope, queue, next_runnable_at, inserted_at, updated_at)
+    INSERT INTO queuetopia_pending_queues (scope, queue, next_performable_at, inserted_at, updated_at)
     SELECT scope,
            queue,
            MIN(GREATEST(scheduled_at, COALESCE(next_attempt_at, scheduled_at))),

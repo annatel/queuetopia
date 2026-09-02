@@ -16,7 +16,7 @@ defmodule Queuetopia.PendingQueues do
     on_conflict =
       from(pq in PendingQueue,
         update: [
-          set: [next_runnable_at: fragment("LEAST(next_runnable_at, ?)", ^scheduled_at)]
+          set: [next_performable_at: fragment("LEAST(next_performable_at, ?)", ^scheduled_at)]
         ]
       )
 
@@ -24,7 +24,7 @@ defmodule Queuetopia.PendingQueues do
     |> PendingQueue.changeset(%{
       scope: job.scope,
       queue: job.queue,
-      next_runnable_at: scheduled_at
+      next_performable_at: scheduled_at
     })
     |> repo.insert!(upsert_opts(repo, on_conflict))
   end
@@ -34,9 +34,9 @@ defmodule Queuetopia.PendingQueues do
     |> PendingQueue.changeset(%{
       scope: job.scope,
       queue: job.queue,
-      next_runnable_at: next_runnable_at(job)
+      next_performable_at: Jobs.next_performable_at(job)
     })
-    |> repo.insert!(upsert_opts(repo, set: [next_runnable_at: next_runnable_at(job)]))
+    |> repo.insert!(upsert_opts(repo, set: [next_performable_at: Jobs.next_performable_at(job)]))
   end
 
   defp upsert_opts(repo, on_conflict) do
@@ -48,28 +48,58 @@ defmodule Queuetopia.PendingQueues do
   @doc false
   @spec refresh_pending_queue!(module, binary, binary) :: :ok
   def refresh_pending_queue!(repo, scope, queue) do
-    case Jobs.head_pending_job(repo, scope, queue) do
-      nil ->
-        delete_pending_queue(repo, scope, queue)
+    {:ok, :ok} =
+      repo.transaction(fn ->
+        lock_pending_queue(repo, scope, queue)
 
-      %Job{} = job ->
-        update_pending_queue!(repo, job)
-    end
+        case Jobs.get_next_job(repo, scope, queue) do
+          %Job{} = job -> update_pending_queue!(repo, job)
+          nil -> delete_pending_queue(repo, scope, queue)
+        end
+
+        :ok
+      end)
 
     :ok
   end
 
-  defp delete_pending_queue(repo, scope, queue) do
-    PendingQueue
-    |> where([pq], pq.scope == ^scope and pq.queue == ^queue)
-    |> repo.delete_all()
+  @doc false
+  def lock_pending_queue(repo, scope, queue) do
+    PendingQueueQueryable.queryable()
+    |> PendingQueueQueryable.filter(scope: scope, queue: queue)
+    |> lock("FOR UPDATE")
+    |> repo.one()
   end
 
-  defp next_runnable_at(%Job{scheduled_at: scheduled_at, next_attempt_at: nil}),
-    do: DateTime.truncate(scheduled_at, :second)
+  @doc """
+  Repairs the pending queues of a scope against the jobs table: recreates
+  the missing rows, deletes the orphans and fixes the drifted values.
+  """
+  @spec reconcile_pending_queues!(module, binary) :: :ok
+  def reconcile_pending_queues!(repo, scope) do
+    queues_holding_pending_jobs =
+      Queuetopia.Jobs.JobQueryable.queryable()
+      |> Queuetopia.Jobs.JobQueryable.filter(scope: scope, available?: true)
+      |> select([job], job.queue)
+      |> distinct(true)
+      |> repo.all()
 
-  defp next_runnable_at(%Job{scheduled_at: scheduled_at, next_attempt_at: next_attempt_at}),
-    do: [scheduled_at, next_attempt_at] |> Enum.max(DateTime) |> DateTime.truncate(:second)
+    listed_queues =
+      PendingQueueQueryable.queryable()
+      |> PendingQueueQueryable.filter(scope: scope)
+      |> select([pq], pq.queue)
+      |> repo.all()
+
+    (queues_holding_pending_jobs ++ listed_queues)
+    |> Enum.uniq()
+    |> Enum.each(&refresh_pending_queue!(repo, scope, &1))
+  end
+
+  defp delete_pending_queue(repo, scope, queue) do
+    PendingQueueQueryable.queryable()
+    |> PendingQueueQueryable.filter(scope: scope, queue: queue)
+    |> repo.delete_all()
+  end
 
   @doc """
   List the available pending queues by scope a.k.a by Queuetopia.

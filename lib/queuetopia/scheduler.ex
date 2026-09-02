@@ -146,7 +146,7 @@ defmodule Queuetopia.Scheduler do
 
     jobs =
       PendingQueues.list_available_pending_queues(repo, scope, limit: limit)
-      |> Enum.map(&perform_next_pending_job(&1, task_supervisor_name, repo, scope))
+      |> Enum.map(&run_next_performable_job(&1, task_supervisor_name, repo, scope))
       |> Enum.reject(&is_nil(&1))
       |> Enum.into(%{})
       |> Map.merge(jobs)
@@ -158,20 +158,20 @@ defmodule Queuetopia.Scheduler do
     jobs
   end
 
-  defp perform_next_pending_job(
+  defp run_next_performable_job(
          queue,
          task_supervisor_name,
          repo,
          scope
        ) do
-    case Jobs.claim_next_runnable_job(repo, scope, queue) do
+    case Jobs.acquire_next_performable_job(repo, scope, queue) do
       {:ok, job} ->
         task = Task.Supervisor.async_nolink(task_supervisor_name, Jobs, :perform, [job])
 
         Process.send_after(self(), {:kill, task}, job.timeout)
         {task.ref, job}
 
-      {:error, :no_runnable_job} ->
+      {:error, :no_performable_job} ->
         PendingQueues.refresh_pending_queue!(repo, scope, queue)
         nil
 

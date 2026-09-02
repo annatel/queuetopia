@@ -28,7 +28,7 @@ defmodule Queuetopia.Factory do
     %Queuetopia.PendingQueues.PendingQueue{
       scope: "scope_#{System.unique_integer([:positive])}",
       queue: "queue_#{System.unique_integer([:positive])}",
-      next_runnable_at: utc_now() |> DateTime.truncate(:second)
+      next_performable_at: utc_now() |> DateTime.truncate(:second)
     }
     |> struct!(attrs)
   end
@@ -88,7 +88,7 @@ defmodule Queuetopia.Factory do
     build(:pending_queue,
       scope: job.scope,
       queue: job.queue,
-      next_runnable_at: job.scheduled_at |> DateTime.truncate(:second)
+      next_performable_at: job.scheduled_at |> DateTime.truncate(:second)
     )
     |> Queuetopia.TestRepo.insert!(on_conflict: :nothing)
 

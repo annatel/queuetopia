@@ -9,7 +9,7 @@ defmodule Queuetopia.PendingQueues.PendingQueueQueryable do
   @filterable_fields ~w(scope queue ready? without_locked_queues)a
 
   defp filter_by_field(queryable, {:ready?, true}) do
-    queryable |> where([pq], pq.next_runnable_at <= ^DateTime.utc_now())
+    queryable |> where([pq], pq.next_performable_at <= ^DateTime.utc_now())
   end
 
   defp filter_by_field(queryable, {:without_locked_queues, scope}) do

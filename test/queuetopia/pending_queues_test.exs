@@ -7,13 +7,13 @@ defmodule Queuetopia.PendingQueuesTest do
   alias Queuetopia.PendingQueues.PendingQueue
 
   describe "list_available_pending_queues/1" do
-    test "returns the scoped queues whose next_runnable_at is reached" do
+    test "returns the scoped queues whose next_performable_at is reached" do
       %{queue: queue, scope: scope} = insert_pending_job!(:job)
 
       assert [^queue] = PendingQueues.list_available_pending_queues(TestRepo, scope)
     end
 
-    test "don't list queues whose next_runnable_at is not reached yet" do
+    test "don't list queues whose next_performable_at is not reached yet" do
       %{scope: scope} = insert_pending_job!(:job, scheduled_at: utc_now() |> add(3600))
 
       assert [] = PendingQueues.list_available_pending_queues(TestRepo, scope)
@@ -80,20 +80,23 @@ defmodule Queuetopia.PendingQueuesTest do
   end
 
   describe "pending queues maintenance" do
-    test "create_job registers the queue as pending, runnable at the job's scheduled_at" do
+    test "create_job registers the queue as pending, performable at the job's scheduled_at" do
       params = params_for(:job)
       attrs = job_attrs(params)
 
       assert {:ok, %Job{}} = Jobs.create_job(attrs, TestRepo)
 
-      assert %PendingQueue{next_runnable_at: next_runnable_at} =
+      assert %PendingQueue{next_performable_at: next_performable_at} =
                get_pending_queue(params.scope, params.queue)
 
-      assert DateTime.compare(next_runnable_at, DateTime.truncate(params.scheduled_at, :second)) ==
+      assert DateTime.compare(
+               next_performable_at,
+               DateTime.truncate(params.scheduled_at, :second)
+             ) ==
                :eq
     end
 
-    test "create_job keeps the earliest next_runnable_at of the queue" do
+    test "create_job keeps the earliest next_performable_at of the queue" do
       utc_now = utc_now() |> DateTime.truncate(:second)
       params = params_for(:job, scheduled_at: utc_now |> DateTime.add(3600))
 
@@ -119,46 +122,102 @@ defmodule Queuetopia.PendingQueuesTest do
           TestRepo
         )
 
-      assert %PendingQueue{next_runnable_at: next_runnable_at} =
+      assert %PendingQueue{next_performable_at: next_performable_at} =
                get_pending_queue(params.scope, params.queue)
 
-      assert DateTime.compare(next_runnable_at, utc_now) == :eq
+      assert DateTime.compare(next_performable_at, utc_now) == :eq
     end
 
-    test "a succeeded job moves next_runnable_at to the next job of the queue" do
+    test "a succeeded job moves next_performable_at to the next job of the queue" do
       utc_now = utc_now() |> DateTime.truncate(:second)
       later = utc_now |> DateTime.add(3600)
 
-      job = insert!(:success_job, scope: Queuetopia.TestQueuetopia.scope(), scheduled_at: utc_now)
+      job =
+        insert_pending_job!(:success_job,
+          scope: Queuetopia.TestQueuetopia.scope(),
+          scheduled_at: utc_now
+        )
+
       insert!(:job, scope: job.scope, queue: job.queue, scheduled_at: later)
 
       Jobs.persist_result!(TestRepo, job, :ok)
 
-      assert %PendingQueue{next_runnable_at: next_runnable_at} =
+      assert %PendingQueue{next_performable_at: next_performable_at} =
                get_pending_queue(job.scope, job.queue)
 
-      assert DateTime.compare(next_runnable_at, later) == :eq
+      assert DateTime.compare(next_performable_at, later) == :eq
     end
 
     test "a succeeded last job removes the pending queue" do
-      job = insert!(:success_job, scope: Queuetopia.TestQueuetopia.scope())
+      job = insert_pending_job!(:success_job, scope: Queuetopia.TestQueuetopia.scope())
 
       Jobs.persist_result!(TestRepo, job, :ok)
 
       assert is_nil(get_pending_queue(job.scope, job.queue))
     end
 
-    test "a failed job pushes next_runnable_at to its next attempt" do
-      job = insert!(:failure_job, scope: Queuetopia.TestQueuetopia.scope(), max_backoff: 60_000)
+    test "a failed job pushes next_performable_at to its next attempt" do
+      job =
+        insert_pending_job!(:failure_job,
+          scope: Queuetopia.TestQueuetopia.scope(),
+          max_backoff: 60_000
+        )
 
       Jobs.persist_result!(TestRepo, job, {:error, "error"})
 
       %Job{next_attempt_at: next_attempt_at} = TestRepo.reload(job)
 
-      assert %PendingQueue{next_runnable_at: next_runnable_at} =
+      assert %PendingQueue{next_performable_at: next_performable_at} =
                get_pending_queue(job.scope, job.queue)
 
-      assert DateTime.compare(next_runnable_at, next_attempt_at) == :eq
+      assert DateTime.compare(next_performable_at, next_attempt_at) == :eq
+    end
+  end
+
+  describe "reconcile_pending_queues!/2" do
+    test "recreates the missing row of a queue holding pending jobs" do
+      %{scope: scope, queue: queue, scheduled_at: scheduled_at} = insert!(:job)
+
+      :ok = PendingQueues.reconcile_pending_queues!(TestRepo, scope)
+
+      assert %PendingQueue{next_performable_at: next_performable_at} =
+               get_pending_queue(scope, queue)
+
+      assert DateTime.compare(next_performable_at, DateTime.truncate(scheduled_at, :second)) ==
+               :eq
+    end
+
+    test "deletes an orphan row whose queue has no pending job" do
+      %{scope: scope, queue: queue} = insert!(:pending_queue)
+
+      :ok = PendingQueues.reconcile_pending_queues!(TestRepo, scope)
+
+      assert is_nil(get_pending_queue(scope, queue))
+    end
+
+    test "fixes a row drifted away from its queue's head job" do
+      utc_now = utc_now() |> DateTime.truncate(:second)
+      later = utc_now |> DateTime.add(3600)
+
+      %{scope: scope, queue: queue} = insert!(:job, scheduled_at: utc_now)
+      insert!(:pending_queue, scope: scope, queue: queue, next_performable_at: later)
+
+      :ok = PendingQueues.reconcile_pending_queues!(TestRepo, scope)
+
+      assert %PendingQueue{next_performable_at: next_performable_at} =
+               get_pending_queue(scope, queue)
+
+      assert DateTime.compare(next_performable_at, utc_now) == :eq
+    end
+
+    test "leaves the other scopes alone" do
+      %{scope: scope, queue: queue} = insert!(:job)
+      %{scope: other_scope, queue: other_queue} = insert!(:pending_queue)
+
+      :ok = PendingQueues.reconcile_pending_queues!(TestRepo, scope)
+
+      assert is_nil(get_pending_queue(scope, queue)) == false
+      assert get_pending_queue(other_scope, other_queue)
     end
   end
 

@@ -3,7 +3,7 @@ defmodule Queuetopia.PendingQueues.PendingQueueTest do
 
   alias Queuetopia.PendingQueues.PendingQueue
 
-  test "requires scope, queue and next_runnable_at" do
+  test "requires scope, queue and next_performable_at" do
     changeset = PendingQueue.changeset(%PendingQueue{}, %{})
 
     refute changeset.valid?
@@ -11,7 +11,7 @@ defmodule Queuetopia.PendingQueues.PendingQueueTest do
     assert %{
              scope: ["can't be blank"],
              queue: ["can't be blank"],
-             next_runnable_at: ["can't be blank"]
+             next_performable_at: ["can't be blank"]
            } = errors_on(changeset)
   end
 
@@ -19,7 +19,7 @@ defmodule Queuetopia.PendingQueues.PendingQueueTest do
     attrs = %{
       scope: "scope_1",
       queue: "queue_1",
-      next_runnable_at: DateTime.utc_now() |> DateTime.truncate(:second)
+      next_performable_at: DateTime.utc_now() |> DateTime.truncate(:second)
     }
 
     %PendingQueue{} |> PendingQueue.changeset(attrs) |> TestRepo.insert!()
