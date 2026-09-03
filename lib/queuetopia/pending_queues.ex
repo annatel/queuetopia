@@ -73,8 +73,6 @@ defmodule Queuetopia.PendingQueues do
 
   @doc """
   List the available pending queues by scope a.k.a by Queuetopia.
-
-  The queues come from the queuetopia_pending_queues table.
   """
   @spec list_available_pending_queues(module, binary, keyword()) :: [binary]
   def list_available_pending_queues(repo, scope, opts \\ []) do

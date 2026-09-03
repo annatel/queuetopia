@@ -97,14 +97,14 @@ defmodule Queuetopia.JobsTest do
       assert {:ok, %Job{id: ^id_1}} = Jobs.acquire_next_performable_job(TestRepo, scope, queue)
     end
 
-    test "when the queue is empty, returns nil" do
+    test "when the queue is empty" do
       %{queue: queue, scope: scope} = insert!(:done_job)
 
       assert {:error, :no_performable_job} =
                Jobs.acquire_next_performable_job(TestRepo, scope, queue)
     end
 
-    test "when the queue does not exist, returns nil" do
+    test "when the queue does not exist" do
       %{queue: queue, scope: scope} = params_for(:job)
 
       assert {:error, :no_performable_job} =
@@ -133,7 +133,7 @@ defmodule Queuetopia.JobsTest do
                Jobs.acquire_next_performable_job(TestRepo, scope, queue)
     end
 
-    test "when max job attempts is reached, returns nil" do
+    test "when max job attempts is reached" do
       %Job{queue: queue, scope: scope} =
         insert!(:job, next_attempt_at: utc_now(), attempts: 20, max_attempts: 20)
 
