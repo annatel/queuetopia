@@ -71,30 +71,6 @@ defmodule Queuetopia.PendingQueues do
     |> repo.one()
   end
 
-  @doc """
-  Repairs the pending queues of a scope against the jobs table: recreates
-  the missing rows, deletes the orphans and fixes the drifted values.
-  """
-  @spec reconcile_pending_queues!(module, binary) :: :ok
-  def reconcile_pending_queues!(repo, scope) do
-    queues_holding_pending_jobs =
-      Queuetopia.Jobs.JobQueryable.queryable()
-      |> Queuetopia.Jobs.JobQueryable.filter(scope: scope, available?: true)
-      |> select([job], job.queue)
-      |> distinct(true)
-      |> repo.all()
-
-    listed_queues =
-      PendingQueueQueryable.queryable()
-      |> PendingQueueQueryable.filter(scope: scope)
-      |> select([pq], pq.queue)
-      |> repo.all()
-
-    (queues_holding_pending_jobs ++ listed_queues)
-    |> Enum.uniq()
-    |> Enum.each(&refresh_pending_queue!(repo, scope, &1))
-  end
-
   defp delete_pending_queue(repo, scope, queue) do
     PendingQueueQueryable.queryable()
     |> PendingQueueQueryable.filter(scope: scope, queue: queue)

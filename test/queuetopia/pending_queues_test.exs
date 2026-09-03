@@ -174,53 +174,6 @@ defmodule Queuetopia.PendingQueuesTest do
     end
   end
 
-  describe "reconcile_pending_queues!/2" do
-    test "recreates the missing row of a queue holding pending jobs" do
-      %{scope: scope, queue: queue, scheduled_at: scheduled_at} = insert!(:job)
-
-      :ok = PendingQueues.reconcile_pending_queues!(TestRepo, scope)
-
-      assert %PendingQueue{next_performable_at: next_performable_at} =
-               get_pending_queue(scope, queue)
-
-      assert DateTime.compare(next_performable_at, DateTime.truncate(scheduled_at, :second)) ==
-               :eq
-    end
-
-    test "deletes an orphan row whose queue has no pending job" do
-      %{scope: scope, queue: queue} = insert!(:pending_queue)
-
-      :ok = PendingQueues.reconcile_pending_queues!(TestRepo, scope)
-
-      assert is_nil(get_pending_queue(scope, queue))
-    end
-
-    test "fixes a row drifted away from its queue's head job" do
-      utc_now = utc_now() |> DateTime.truncate(:second)
-      later = utc_now |> DateTime.add(3600)
-
-      %{scope: scope, queue: queue} = insert!(:job, scheduled_at: utc_now)
-      insert!(:pending_queue, scope: scope, queue: queue, next_performable_at: later)
-
-      :ok = PendingQueues.reconcile_pending_queues!(TestRepo, scope)
-
-      assert %PendingQueue{next_performable_at: next_performable_at} =
-               get_pending_queue(scope, queue)
-
-      assert DateTime.compare(next_performable_at, utc_now) == :eq
-    end
-
-    test "leaves the other scopes alone" do
-      %{scope: scope, queue: queue} = insert!(:job)
-      %{scope: other_scope, queue: other_queue} = insert!(:pending_queue)
-
-      :ok = PendingQueues.reconcile_pending_queues!(TestRepo, scope)
-
-      assert is_nil(get_pending_queue(scope, queue)) == false
-      assert get_pending_queue(other_scope, other_queue)
-    end
-  end
-
   defp job_attrs(params) do
     Map.take(params, [
       :scope,
