@@ -60,9 +60,6 @@ defmodule Queuetopia.Jobs do
   @spec create_job(map, module) :: {:error, Ecto.Changeset.t()} | {:ok, Job.t()}
   def create_job(attrs, repo) do
     Ecto.Multi.new()
-    |> Ecto.Multi.run(:lock_pending_queue, fn repo, _ ->
-      {:ok, PendingQueues.lock_pending_queue(repo, attrs[:scope], attrs[:queue])}
-    end)
     |> Ecto.Multi.insert(:job, Job.create_changeset(attrs))
     |> Ecto.Multi.run(:pending_queue, fn repo, %{job: job} ->
       {:ok, PendingQueues.upsert_pending_queue(repo, job)}
