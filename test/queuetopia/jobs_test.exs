@@ -19,6 +19,85 @@ defmodule Queuetopia.JobsTest do
                locked_at |> DateTime.add(6_000, :millisecond) |> DateTime.truncate(:second)
     end
 
+    test "under concurrent acquires, exactly one claims the job" do
+      scope = "scope_#{System.unique_integer([:positive])}"
+      queue = "queue_#{System.unique_integer([:positive])}"
+      test_pid = self()
+      contenders = 5
+
+      holder =
+        spawn_link(fn ->
+          Ecto.Adapters.SQL.Sandbox.unboxed_run(TestRepo, fn ->
+            insert_pending_job!(:job, scope: scope, queue: queue)
+            send(test_pid, :seeded)
+
+            receive do
+              :release -> :ok
+            end
+
+            TestRepo.delete_all(Ecto.Query.where(Job, scope: ^scope))
+            TestRepo.delete_all(Ecto.Query.where(Lock, scope: ^scope))
+
+            TestRepo.delete_all(
+              Ecto.Query.where(Queuetopia.PendingQueues.PendingQueue, scope: ^scope)
+            )
+
+            TestRepo.query!("UPDATE queuetopia_sequences SET sequence = sequence - 1")
+            send(test_pid, :cleaned)
+          end)
+        end)
+
+      assert_receive :seeded, 1_000
+
+      for _ <- 1..contenders do
+        spawn_link(fn ->
+          Ecto.Adapters.SQL.Sandbox.unboxed_run(TestRepo, fn ->
+            send(test_pid, {:ready, self()})
+
+            receive do
+              :go -> :ok
+            end
+
+            result =
+              try do
+                Jobs.acquire_next_performable_job(TestRepo, scope, queue)
+              rescue
+                error in MyXQL.Error ->
+                  assert Exception.message(error) =~ "NOWAIT"
+                  {:error, :nowait}
+              end
+
+            send(test_pid, {:acquired, result})
+          end)
+        end)
+      end
+
+      contender_pids =
+        for _ <- 1..contenders do
+          assert_receive {:ready, pid}, 1_000
+          pid
+        end
+
+      Enum.each(contender_pids, &send(&1, :go))
+
+      results =
+        for _ <- 1..contenders do
+          assert_receive {:acquired, result}, 5_000
+          result
+        end
+
+      assert Enum.count(results, &match?({:ok, %Job{}}, &1)) == 1
+
+      assert Enum.reject(results, &match?({:ok, _}, &1))
+             |> Enum.uniq()
+             |> Enum.all?(&(&1 in [{:error, :locked}, {:error, :nowait}]))
+
+      assert [%Lock{}] = TestRepo.all(Ecto.Query.where(Lock, scope: ^scope))
+
+      send(holder, :release)
+      assert_receive :cleaned, 1_000
+    end
+
     test "when the queue has an expired lock, still returns an error" do
       %{queue: queue, scope: scope} = insert_pending_job!(:job, scheduled_at: utc_now())
       insert!(:expired_lock, scope: scope, queue: queue)
@@ -34,7 +113,8 @@ defmodule Queuetopia.JobsTest do
     end
 
     test "when the head job is not performable yet, returns an error without locking the queue" do
-      %{queue: queue, scope: scope} = insert_pending_job!(:job, scheduled_at: utc_now() |> add(3600))
+      %{queue: queue, scope: scope} =
+        insert_pending_job!(:job, scheduled_at: utc_now() |> add(3600))
 
       assert {:error, :no_performable_job} =
                Jobs.acquire_next_performable_job(TestRepo, scope, queue)
@@ -90,7 +170,8 @@ defmodule Queuetopia.JobsTest do
     test "for multiple jobs with the same scheduled_at, preseance by sequence" do
       utc_now = utc_now()
 
-      %{id: id_1, scope: scope, queue: queue} = insert_pending_job!(:job, scheduled_at: utc_now, sequence: 1)
+      %{id: id_1, scope: scope, queue: queue} =
+        insert_pending_job!(:job, scheduled_at: utc_now, sequence: 1)
 
       insert_pending_job!(:job, scope: scope, queue: queue, scheduled_at: utc_now, sequence: 2)
 
@@ -120,7 +201,8 @@ defmodule Queuetopia.JobsTest do
     end
 
     test "when the next pending job next attempt is scheduled for now" do
-      %Job{queue: queue, scope: scope, id: id} = insert_pending_job!(:job, next_attempt_at: utc_now())
+      %Job{queue: queue, scope: scope, id: id} =
+        insert_pending_job!(:job, next_attempt_at: utc_now())
 
       assert {:ok, %Job{id: ^id}} = Jobs.acquire_next_performable_job(TestRepo, scope, queue)
     end
