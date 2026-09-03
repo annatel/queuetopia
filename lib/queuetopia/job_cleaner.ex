@@ -7,7 +7,7 @@ defmodule Queuetopia.JobCleaner do
   """
 
   use GenServer
-  alias Queuetopia.Queue
+  alias Queuetopia.Jobs
 
   def start_link(opts) do
     GenServer.start_link(__MODULE__, opts, name: opts[:name])
@@ -42,7 +42,7 @@ defmodule Queuetopia.JobCleaner do
       job_retention: job_retention
     } = state
 
-    Queue.cleanup_completed_jobs(repo, scope, job_retention)
+    Jobs.cleanup_completed_jobs(repo, scope, job_retention)
 
     Process.send_after(self(), :cleanup, cleanup_interval)
     {:noreply, state}

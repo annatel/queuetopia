@@ -3,8 +3,11 @@ defmodule Queuetopia.Scheduler do
 
   use GenServer
 
-  alias Queuetopia.Queue
-  alias Queuetopia.Queue.Job
+  require Logger
+
+  alias Queuetopia.Jobs
+  alias Queuetopia.Locks
+  alias Queuetopia.PendingQueues
 
   @type option :: {:poll_interval, pos_integer()}
 
@@ -79,7 +82,7 @@ defmodule Queuetopia.Scheduler do
     job = Map.get(jobs, ref)
     :ok = handle_task_result(repo, job, {:error, inspect(reason)})
 
-    Queue.unlock_queue(repo, scope, job.queue)
+    Locks.unlock_queue(repo, scope, job.queue)
     {:noreply, %{state | jobs: Map.delete(jobs, ref)}}
   end
 
@@ -98,7 +101,7 @@ defmodule Queuetopia.Scheduler do
     job = Map.get(jobs, ref)
     :ok = handle_task_result(repo, job, task_result)
 
-    Queue.unlock_queue(repo, scope, job.queue)
+    Locks.unlock_queue(repo, scope, job.queue)
 
     send_poll(self())
 
@@ -116,7 +119,7 @@ defmodule Queuetopia.Scheduler do
   defp safe_persist_result(repo, job, result) do
     with {:error, error} <-
            (try do
-              Queue.persist_result!(repo, job, result)
+              Jobs.persist_result!(repo, job, result)
             rescue
               exception ->
                 {:error, Exception.message(exception)}
@@ -140,12 +143,12 @@ defmodule Queuetopia.Scheduler do
     number_of_concurrent_jobs = Keyword.fetch!(opts, :number_of_concurrent_jobs)
     number_of_running_jobs = Enum.count(jobs)
 
-    Queue.release_expired_locks(repo, scope)
+    Locks.release_expired_locks(repo, scope)
     limit = number_of_concurrent_jobs && number_of_concurrent_jobs - number_of_running_jobs
 
     jobs =
-      Queue.list_available_pending_queues(repo, scope, limit: limit)
-      |> Enum.map(&perform_next_pending_job(&1, task_supervisor_name, repo, scope))
+      PendingQueues.list_available_pending_queues(repo, scope, limit: limit)
+      |> Enum.map(&run_next_performable_job(&1, task_supervisor_name, repo, scope))
       |> Enum.reject(&is_nil(&1))
       |> Enum.into(%{})
       |> Map.merge(jobs)
@@ -157,20 +160,33 @@ defmodule Queuetopia.Scheduler do
     jobs
   end
 
-  defp perform_next_pending_job(
+  defp run_next_performable_job(
          queue,
          task_supervisor_name,
          repo,
          scope
        ) do
-    with %Job{} = job <- Queue.get_next_pending_job(repo, scope, queue),
-         {:ok, job} <- Queue.fetch_job(repo, job) do
-      task = Task.Supervisor.async_nolink(task_supervisor_name, Queue, :perform, [job])
+    case Jobs.acquire_next_performable_job(repo, scope, queue) do
+      {:ok, job} ->
+        task = Task.Supervisor.async_nolink(task_supervisor_name, Jobs, :perform, [job])
 
-      Process.send_after(self(), {:kill, task}, job.timeout)
-      {task.ref, job}
-    else
-      _ -> nil
+        Process.send_after(self(), {:kill, task}, job.timeout)
+        {task.ref, job}
+
+      {:error, :no_performable_job} ->
+        PendingQueues.refresh_pending_queue!(repo, scope, queue)
+        nil
+
+      {:error, _} ->
+        nil
     end
+  rescue
+    exception ->
+      Logger.error(
+        "Polling the queue #{queue} failed: " <>
+          Exception.format(:error, exception, __STACKTRACE__)
+      )
+
+      nil
   end
 end

@@ -1,7 +1,7 @@
 defmodule Queuetopia.JobCleanerTest do
   use Queuetopia.DataCase, async: false
 
-  alias Queuetopia.Queue.Job
+  alias Queuetopia.Jobs.Job
   alias Queuetopia.TestRepo
   alias Queuetopia.TestQueuetopia
 

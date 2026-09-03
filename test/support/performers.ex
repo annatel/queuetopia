@@ -1,7 +1,7 @@
 defmodule Queuetopia.TestPerfomer do
   use Queuetopia.Performer
   import Queuetopia.Factory
-  alias Queuetopia.Queue.Job
+  alias Queuetopia.Jobs.Job
 
   @impl true
 
@@ -49,7 +49,7 @@ end
 defmodule Queuetopia.TestQueuetopia.Performer do
   use Queuetopia.Performer
 
-  alias Queuetopia.Queue.Job
+  alias Queuetopia.Jobs.Job
 
   @impl true
   def perform(%Job{} = job) do
@@ -60,7 +60,7 @@ end
 defmodule Queuetopia.TestQueuetopia_2.Performer do
   use Queuetopia.Performer
 
-  alias Queuetopia.Queue.Job
+  alias Queuetopia.Jobs.Job
 
   @impl true
   def perform(%Job{} = job) do
@@ -71,7 +71,7 @@ end
 defmodule Queuetopia.TestQueuetopia_RedefTest.Performer do
   use Queuetopia.Performer
 
-  alias Queuetopia.Queue.Job
+  alias Queuetopia.Jobs.Job
 
   @impl true
   def perform(%Job{} = job) do
@@ -82,7 +82,7 @@ end
 defmodule Queuetopia.TestQueuetopia_InMemSeq.Performer do
   use Queuetopia.Performer
 
-  alias Queuetopia.Queue.Job
+  alias Queuetopia.Jobs.Job
 
   @impl true
   def perform(%Job{} = job) do
@@ -93,7 +93,7 @@ end
 defmodule Queuetopia.TestQueuetopiaWithBackoff.Performer do
   use Queuetopia.Performer
 
-  alias Queuetopia.Queue.Job
+  alias Queuetopia.Jobs.Job
 
   @impl true
 
@@ -108,7 +108,7 @@ end
 defmodule Queuetopia.TestQueuetopiaWithHandleFailedJob.Performer do
   use Queuetopia.Performer
 
-  alias Queuetopia.Queue.Job
+  alias Queuetopia.Jobs.Job
 
   @impl true
   def perform(%Job{} = job) do
@@ -125,7 +125,7 @@ end
 defmodule Queuetopia.TestQueuetopiaThrowingInHandleFailedJob.Performer do
   use Queuetopia.Performer
 
-  alias Queuetopia.Queue.Job
+  alias Queuetopia.Jobs.Job
 
   @impl true
   def perform(%Job{} = job) do
@@ -141,7 +141,7 @@ end
 defmodule Queuetopia.TestQueuetopiaRaisingInHandleFailedJob.Performer do
   use Queuetopia.Performer
 
-  alias Queuetopia.Queue.Job
+  alias Queuetopia.Jobs.Job
 
   @impl true
   def perform(%Job{} = job) do
@@ -157,7 +157,7 @@ end
 defmodule Queuetopia.TestQueuetopiaErroringInHandleFailedJob.Performer do
   use Queuetopia.Performer
 
-  alias Queuetopia.Queue.Job
+  alias Queuetopia.Jobs.Job
 
   @impl true
   def perform(%Job{} = job) do
@@ -173,7 +173,7 @@ end
 defmodule Queuetopia.TestQueuetopiaExitingInHandleFailedJob.Performer do
   use Queuetopia.Performer
 
-  alias Queuetopia.Queue.Job
+  alias Queuetopia.Jobs.Job
 
   @impl true
   def perform(%Job{} = job) do
