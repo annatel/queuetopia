@@ -3,24 +3,33 @@ defmodule Queuetopia.Migrations.V10 do
 
   use Ecto.Migration
 
+  @backfill_sql """
+  INSERT INTO queuetopia_pending_queues (scope, queue, next_performable_at, inserted_at, updated_at)
+  SELECT scope,
+         queue,
+         MIN(GREATEST(scheduled_at, COALESCE(next_attempt_at, scheduled_at))),
+         UTC_TIMESTAMP(),
+         UTC_TIMESTAMP()
+  FROM queuetopia_jobs
+  WHERE done_at IS NULL AND attempts < max_attempts
+  GROUP BY scope, queue
+  ON DUPLICATE KEY UPDATE
+    next_performable_at = LEAST(next_performable_at, VALUES(next_performable_at)),
+    updated_at = UTC_TIMESTAMP()
+  """
+
   def up do
-    execute("""
-    INSERT INTO queuetopia_pending_queues (scope, queue, next_performable_at, inserted_at, updated_at)
-    SELECT scope,
-           queue,
-           MIN(GREATEST(scheduled_at, COALESCE(next_attempt_at, scheduled_at))),
-           UTC_TIMESTAMP(),
-           UTC_TIMESTAMP()
-    FROM queuetopia_jobs
-    WHERE done_at IS NULL AND attempts < max_attempts
-    GROUP BY scope, queue
-    ON DUPLICATE KEY UPDATE
-      next_performable_at = LEAST(next_performable_at, VALUES(next_performable_at)),
-      updated_at = UTC_TIMESTAMP()
-    """)
+    execute(@backfill_sql)
   end
 
   def down do
+    :ok
+  end
+
+  @doc false
+  @spec backfill(module) :: :ok
+  def backfill(repo) do
+    repo.query!(@backfill_sql)
     :ok
   end
 end
