@@ -11,6 +11,7 @@
 - **Breaking:** Postgres support is removed — Queuetopia targets MySQL only. The `postgrex` dependency, the per-adapter migration branches and the Postgres upsert options are gone.
 - **Breaking:** `Queuetopia.Queue` is split into `Queuetopia.Jobs` (creation, claim, perform, results, cleanup), `Queuetopia.PendingQueues` (row maintenance and the poll listing) and `Queuetopia.Locks` (take, release, expire). `Queuetopia.Queue.Job` becomes `Queuetopia.Jobs.Job`; update any code referencing the old modules.
 - **Breaking:** several formerly public job predicates (`done?`, `max_attempts_reached?`, the time check) are folded into `performable_now?` or made private; the `Queue` API is narrowed to the claim/get-next surface.
+- Dependencies: `ecto`/`ecto_sql` 3.14, `myxql` 0.9 and `decimal` 3.1 — `decimal` < 3.0 is affected by CVE-2026-32686 (unbounded exponent in `Decimal.new`, DoS). Consumers must be able to take `decimal` 3.
 
 ## 5.0.0 - 2026-09-01
 
