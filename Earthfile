@@ -62,7 +62,7 @@ test:
             -v "$PWD/README.md:/app/README.md" \
             -w /app \
             --name queuetopia \
-            elixir:latest mix test;
+            elixir:latest mix test --cover;
     END
 
 check-tag:

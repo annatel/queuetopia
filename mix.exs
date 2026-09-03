@@ -14,6 +14,15 @@ defmodule Queuetopia.MixProject do
       description: description(),
       deps: deps(),
       elixirc_paths: elixirc_paths(Mix.env()),
+      test_coverage: [
+        ignore_modules: [
+          ~r/^Queuetopia\.Migrations/,
+          ~r/^Queuetopia\.Test[A-Z]/,
+          Queuetopia.Factory,
+          Queuetopia.DataCase
+        ],
+        summary: [threshold: 95]
+      ],
       aliases: aliases(),
       docs: docs()
     ]
