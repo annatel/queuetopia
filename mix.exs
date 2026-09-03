@@ -33,7 +33,6 @@ defmodule Queuetopia.MixProject do
     [
       {:ecto_sql, "~> 3.11"},
       {:myxql, ">= 0.0.0", only: :test},
-      {:postgrex, ">= 0.0.0", only: :test},
       {:antl_utils_ecto, "~> 2.12"},
       {:ex_doc, "~> 0.32", only: :dev, runtime: false}
     ]

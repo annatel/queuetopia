@@ -21,6 +21,5 @@ defmodule Queuetopia.PendingQueues.PendingQueue do
     |> cast(attrs, [:scope, :queue, :next_performable_at])
     |> validate_required([:scope, :queue, :next_performable_at])
     |> unique_constraint(:scope, name: :PRIMARY)
-    |> unique_constraint(:scope, name: :queuetopia_pending_queues_pkey)
   end
 end

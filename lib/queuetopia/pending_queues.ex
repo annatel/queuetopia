@@ -26,7 +26,7 @@ defmodule Queuetopia.PendingQueues do
       queue: job.queue,
       next_performable_at: scheduled_at
     })
-    |> repo.insert!(upsert_opts(repo, on_conflict))
+    |> repo.insert!(on_conflict: on_conflict)
   end
 
   defp update_pending_queue!(repo, %Job{} = job) do
@@ -36,13 +36,7 @@ defmodule Queuetopia.PendingQueues do
       queue: job.queue,
       next_performable_at: Jobs.next_performable_at(job)
     })
-    |> repo.insert!(upsert_opts(repo, set: [next_performable_at: Jobs.next_performable_at(job)]))
-  end
-
-  defp upsert_opts(repo, on_conflict) do
-    if repo.__adapter__() == Ecto.Adapters.MyXQL,
-      do: [on_conflict: on_conflict],
-      else: [on_conflict: on_conflict, conflict_target: [:scope, :queue]]
+    |> repo.insert!(on_conflict: [set: [next_performable_at: Jobs.next_performable_at(job)]])
   end
 
   @doc false
