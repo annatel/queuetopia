@@ -148,6 +148,60 @@ defmodule Queuetopia.JobsTest do
   end
 
   describe "persist_result!/4" do
+    test "commits the result and survives when the pending row is held by another transaction" do
+      scope = "scope_#{System.unique_integer([:positive])}"
+      queue = "queue_#{System.unique_integer([:positive])}"
+      test_pid = self()
+
+      holder =
+        spawn_link(fn ->
+          Ecto.Adapters.SQL.Sandbox.unboxed_run(TestRepo, fn ->
+            job = insert_pending_job!(:success_job, scope: scope, queue: queue)
+            send(test_pid, {:seeded, job})
+
+            TestRepo.transaction(fn ->
+              Queuetopia.PendingQueues.lock_pending_queue(TestRepo, scope, queue)
+              send(test_pid, :locked)
+
+              receive do
+                :release -> :ok
+              end
+            end)
+
+            TestRepo.delete_all(Ecto.Query.where(Job, scope: ^scope))
+
+            TestRepo.delete_all(
+              Ecto.Query.where(Queuetopia.PendingQueues.PendingQueue, scope: ^scope)
+            )
+
+            TestRepo.query!("UPDATE queuetopia_sequences SET sequence = sequence - 1")
+            send(test_pid, :cleaned)
+          end)
+        end)
+
+      assert_receive {:seeded, job}, 1_000
+      assert_receive :locked, 1_000
+
+      spawn_link(fn ->
+        Ecto.Adapters.SQL.Sandbox.unboxed_run(TestRepo, fn ->
+          log =
+            ExUnit.CaptureLog.capture_log(fn ->
+              %Job{} = Jobs.persist_result!(TestRepo, job, :ok)
+            end)
+
+          send(test_pid, {:persisted, TestRepo.get(Job, job.id), log})
+        end)
+      end)
+
+      assert_receive {:persisted, %Job{} = done_job, log}, 5_000
+      refute is_nil(done_job.done_at)
+      assert is_nil(done_job.error)
+      assert log =~ "Refreshing the pending queue"
+
+      send(holder, :release)
+      assert_receive :cleaned, 1_000
+    end
+
     test "when a job succeeded, persists the job as succeeded" do
       job = insert!(:success_job)
 
