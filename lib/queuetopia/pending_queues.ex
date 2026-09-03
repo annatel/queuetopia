@@ -30,13 +30,15 @@ defmodule Queuetopia.PendingQueues do
   end
 
   defp update_pending_queue!(repo, %Job{} = job) do
+    next_performable_at = Jobs.next_performable_at(job)
+
     %PendingQueue{}
     |> PendingQueue.changeset(%{
       scope: job.scope,
       queue: job.queue,
-      next_performable_at: Jobs.next_performable_at(job)
+      next_performable_at: next_performable_at
     })
-    |> repo.insert!(on_conflict: [set: [next_performable_at: Jobs.next_performable_at(job)]])
+    |> repo.insert!(on_conflict: [set: [next_performable_at: next_performable_at]])
   end
 
   @doc false
