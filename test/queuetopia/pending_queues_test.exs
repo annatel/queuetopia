@@ -235,6 +235,56 @@ defmodule Queuetopia.PendingQueuesTest do
     ])
   end
 
+  describe "lock_pending_queue/3" do
+    test "fails immediately instead of waiting behind a held row" do
+      scope = "scope_#{System.unique_integer([:positive])}"
+      queue = "queue_#{System.unique_integer([:positive])}"
+      test_pid = self()
+
+      holder =
+        spawn_link(fn ->
+          Ecto.Adapters.SQL.Sandbox.unboxed_run(TestRepo, fn ->
+            build(:pending_queue, scope: scope, queue: queue) |> TestRepo.insert!()
+
+            TestRepo.transaction(fn ->
+              PendingQueues.lock_pending_queue(TestRepo, scope, queue)
+              send(test_pid, :locked)
+
+              receive do
+                :release -> :ok
+              end
+            end)
+
+            TestRepo.delete_all(Ecto.Query.where(PendingQueue, scope: ^scope))
+            send(test_pid, :cleaned)
+          end)
+        end)
+
+      assert_receive :locked, 1_000
+
+      spawn_link(fn ->
+        Ecto.Adapters.SQL.Sandbox.unboxed_run(TestRepo, fn ->
+          {elapsed_us, _} =
+            :timer.tc(fn ->
+              assert_raise MyXQL.Error, ~r/NOWAIT/, fn ->
+                TestRepo.transaction(fn ->
+                  PendingQueues.lock_pending_queue(TestRepo, scope, queue)
+                end)
+              end
+            end)
+
+          send(test_pid, {:contended, elapsed_us})
+        end)
+      end)
+
+      assert_receive {:contended, elapsed_us}, 5_000
+      assert elapsed_us < 1_000_000
+
+      send(holder, :release)
+      assert_receive :cleaned, 1_000
+    end
+  end
+
   defp get_pending_queue(scope, queue) do
     PendingQueue
     |> Ecto.Query.where(scope: ^scope, queue: ^queue)

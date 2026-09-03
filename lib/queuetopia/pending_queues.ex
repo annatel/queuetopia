@@ -67,7 +67,7 @@ defmodule Queuetopia.PendingQueues do
   def lock_pending_queue(repo, scope, queue) do
     PendingQueueQueryable.queryable()
     |> PendingQueueQueryable.filter(scope: scope, queue: queue)
-    |> lock("FOR UPDATE")
+    |> lock("FOR UPDATE NOWAIT")
     |> repo.one()
   end
 
