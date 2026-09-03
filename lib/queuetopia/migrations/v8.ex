@@ -11,24 +11,6 @@ defmodule Queuetopia.Migrations.V8 do
 
       timestamps()
     end
-
-    create(
-      index(:queuetopia_pending_queues, [:scope, :next_performable_at, :queue],
-        name: :queuetopia_pending_queues_performable_index
-      )
-    )
-
-    execute("""
-    INSERT INTO queuetopia_pending_queues (scope, queue, next_performable_at, inserted_at, updated_at)
-    SELECT scope,
-           queue,
-           MIN(GREATEST(scheduled_at, COALESCE(next_attempt_at, scheduled_at))),
-           UTC_TIMESTAMP(),
-           UTC_TIMESTAMP()
-    FROM queuetopia_jobs
-    WHERE done_at IS NULL AND attempts < max_attempts
-    GROUP BY scope, queue
-    """)
   end
 
   def down do
