@@ -1,5 +1,30 @@
+defmodule Queuetopia.SchedulerTest.RaisingOnceRepo do
+  alias Queuetopia.TestRepo
+
+  def start_flag(), do: Agent.start_link(fn -> true end, name: __MODULE__)
+
+  def transaction(fun, opts \\ []) do
+    if Agent.get_and_update(__MODULE__, &{&1, false}),
+      do: raise(DBConnection.ConnectionError, "connection closed"),
+      else: TestRepo.transaction(fun, opts)
+  end
+
+  def all(queryable, opts \\ []), do: TestRepo.all(queryable, opts)
+  def one(queryable, opts \\ []), do: TestRepo.one(queryable, opts)
+  def get(schema, id, opts \\ []), do: TestRepo.get(schema, id, opts)
+  def insert(struct, opts \\ []), do: TestRepo.insert(struct, opts)
+  def insert!(struct, opts \\ []), do: TestRepo.insert!(struct, opts)
+  def update!(struct, opts \\ []), do: TestRepo.update!(struct, opts)
+  def delete_all(queryable, opts \\ []), do: TestRepo.delete_all(queryable, opts)
+  def __adapter__(), do: TestRepo.__adapter__()
+end
+
 defmodule Queuetopia.SchedulerTest do
   use Queuetopia.DataCase
+
+  import ExUnit.CaptureLog
+
+  alias Queuetopia.SchedulerTest.RaisingOnceRepo
 
   alias Queuetopia.Jobs.Job
   alias Queuetopia.Locks.Lock
@@ -9,6 +34,37 @@ defmodule Queuetopia.SchedulerTest do
   setup do
     Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 50)
     :ok
+  end
+
+  test "survives a raising poll: skips the queue for the cycle and retries it on the next one" do
+    scope = TestQueuetopia.scope()
+
+    %{id: job_id_1} = insert_pending_job!(:success_job, scope: scope)
+    %{id: job_id_2} = insert_pending_job!(:success_job, scope: scope)
+
+    {:ok, _} = RaisingOnceRepo.start_flag()
+    start_supervised!({Task.Supervisor, name: RaisingOnceRepo.TaskSupervisor})
+
+    log =
+      capture_log(fn ->
+        {:ok, scheduler} =
+          Queuetopia.Scheduler.start_link(
+            repo: RaisingOnceRepo,
+            scope: scope,
+            poll_interval: 50,
+            task_supervisor_name: RaisingOnceRepo.TaskSupervisor,
+            number_of_concurrent_jobs: nil
+          )
+
+        assert_receive {_, ^job_id_1, :ok}, 1_000
+        assert_receive {_, ^job_id_2, :ok}, 1_000
+        assert Process.alive?(scheduler)
+
+        GenServer.stop(scheduler)
+      end)
+
+    assert log =~ "Polling the queue"
+    assert log =~ "connection closed"
   end
 
   test "poll only available queues" do

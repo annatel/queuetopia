@@ -3,6 +3,8 @@ defmodule Queuetopia.Scheduler do
 
   use GenServer
 
+  require Logger
+
   alias Queuetopia.Jobs
   alias Queuetopia.Locks
   alias Queuetopia.PendingQueues
@@ -178,5 +180,13 @@ defmodule Queuetopia.Scheduler do
       {:error, _} ->
         nil
     end
+  rescue
+    exception ->
+      Logger.error(
+        "Polling the queue #{queue} failed: " <>
+          Exception.format(:error, exception, __STACKTRACE__)
+      )
+
+      nil
   end
 end
