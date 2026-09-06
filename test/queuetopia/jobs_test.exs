@@ -1,3 +1,24 @@
+defmodule Queuetopia.JobsTest.DoneMidAcquireRepo do
+  alias Queuetopia.TestRepo
+
+  def start_hook(fun), do: Agent.start_link(fn -> fun end, name: __MODULE__)
+
+  def insert(changeset, opts \\ []) do
+    case Agent.get_and_update(__MODULE__, &{&1, nil}) do
+      nil -> :ok
+      hook -> hook.()
+    end
+
+    TestRepo.insert(changeset, opts)
+  end
+
+  def transaction(fun, opts \\ []), do: TestRepo.transaction(fun, opts)
+  def rollback(value), do: TestRepo.rollback(value)
+  def all(queryable, opts \\ []), do: TestRepo.all(queryable, opts)
+  def one(queryable, opts \\ []), do: TestRepo.one(queryable, opts)
+  def __adapter__(), do: TestRepo.__adapter__()
+end
+
 defmodule Queuetopia.JobsTest do
   use Queuetopia.DataCase
 
@@ -6,6 +27,57 @@ defmodule Queuetopia.JobsTest do
   alias Queuetopia.Locks.Lock
 
   describe "acquire_next_performable_job/3" do
+    test "releases the claim of a job completed between its read and its lock" do
+      scope = "scope_#{System.unique_integer([:positive])}"
+      queue = "queue_#{System.unique_integer([:positive])}"
+      test_pid = self()
+
+      spawn_link(fn ->
+        Ecto.Adapters.SQL.Sandbox.unboxed_run(TestRepo, fn ->
+          try do
+            job = insert_pending_job!(:success_job, scope: scope, queue: queue)
+
+            {:ok, _} =
+              Queuetopia.JobsTest.DoneMidAcquireRepo.start_hook(fn ->
+                Task.async(fn ->
+                  Ecto.Adapters.SQL.Sandbox.unboxed_run(TestRepo, fn ->
+                    utc_now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+                    TestRepo.update_all(Ecto.Query.where(Job, id: ^job.id),
+                      set: [done_at: utc_now]
+                    )
+                  end)
+                end)
+                |> Task.await()
+              end)
+
+            result =
+              Jobs.acquire_next_performable_job(
+                Queuetopia.JobsTest.DoneMidAcquireRepo,
+                scope,
+                queue
+              )
+
+            lock = TestRepo.get_by(Lock, scope: scope, queue: queue)
+            send(test_pid, {:result, result, lock})
+          after
+            TestRepo.delete_all(Ecto.Query.where(Job, scope: ^scope))
+
+            TestRepo.delete_all(
+              Ecto.Query.where(Queuetopia.PendingQueues.PendingQueue, scope: ^scope)
+            )
+
+            TestRepo.delete_all(Ecto.Query.where(Lock, scope: ^scope))
+            TestRepo.query!("UPDATE queuetopia_sequences SET sequence = sequence - 1")
+            send(test_pid, :cleaned)
+          end
+        end)
+      end)
+
+      assert_receive {:result, {:error, :no_performable_job}, nil}, 5_000
+      assert_receive :cleaned, 1_000
+    end
+
     test "acquires the next performable job and locks the queue" do
       %{id: id, queue: queue, scope: scope} = insert_pending_job!(:job, scheduled_at: utc_now())
       insert_pending_job!(:job, queue: queue, scope: scope, scheduled_at: utc_now() |> add(60))

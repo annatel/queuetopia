@@ -109,21 +109,38 @@ defmodule Queuetopia.Jobs do
   @spec acquire_next_performable_job(module, binary, binary) ::
           {:ok, Job.t()} | {:error, :locked | :no_performable_job}
   def acquire_next_performable_job(repo, scope, queue) do
-    {:ok, result} =
-      repo.transaction(fn ->
-        PendingQueues.lock_pending_queue(repo, scope, queue)
+    repo.transaction(fn ->
+      PendingQueues.lock_pending_queue(repo, scope, queue)
 
-        with %Job{} = job <- get_next_job(repo, scope, queue),
-             true <- performable_now?(job),
-             {:ok, _lock} <- Locks.lock_queue(repo, scope, queue, job.timeout) do
-          {:ok, job}
-        else
-          {:error, :locked} -> {:error, :locked}
-          _ -> {:error, :no_performable_job}
-        end
-      end)
+      with %Job{} = job <- get_next_job(repo, scope, queue),
+           true <- performable_now?(job),
+           {:ok, _lock} <- Locks.lock_queue(repo, scope, queue, job.timeout) do
+        recheck_acquired_job!(repo, job)
+      else
+        {:error, :locked} -> {:error, :locked}
+        _ -> {:error, :no_performable_job}
+      end
+    end)
+    |> case do
+      {:ok, result} -> result
+      {:error, reason} -> {:error, reason}
+    end
+  end
 
-    result
+  defp recheck_acquired_job!(repo, %Job{id: id}) do
+    fresh_job =
+      Job
+      |> where(id: ^id)
+      |> lock("FOR SHARE")
+      |> repo.one()
+
+    case fresh_job do
+      %Job{} = job ->
+        if performable_now?(job), do: {:ok, job}, else: repo.rollback(:no_performable_job)
+
+      nil ->
+        repo.rollback(:no_performable_job)
+    end
   end
 
   @doc false
