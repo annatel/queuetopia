@@ -329,7 +329,7 @@ defmodule Queuetopia.JobsTest do
                Jobs.acquire_next_performable_job(TestRepo, scope_2, queue_3)
     end
 
-    test "preseance by scheduled_at" do
+    test "gives precedence to the earliest scheduled_at" do
       utc_now = utc_now()
 
       %{scope: scope, queue: queue} =
@@ -345,7 +345,7 @@ defmodule Queuetopia.JobsTest do
       assert {:ok, %Job{id: ^id}} = Jobs.acquire_next_performable_job(TestRepo, scope, queue)
     end
 
-    test "for multiple jobs with the same scheduled_at, preseance by sequence" do
+    test "for the same scheduled_at, gives precedence to the lowest sequence" do
       utc_now = utc_now()
 
       %{id: id_1, scope: scope, queue: queue} =
@@ -356,21 +356,21 @@ defmodule Queuetopia.JobsTest do
       assert {:ok, %Job{id: ^id_1}} = Jobs.acquire_next_performable_job(TestRepo, scope, queue)
     end
 
-    test "when the queue is empty" do
+    test "finds no performable job in an empty queue" do
       %{queue: queue, scope: scope} = insert_pending_job!(:done_job)
 
       assert {:error, :no_performable_job} =
                Jobs.acquire_next_performable_job(TestRepo, scope, queue)
     end
 
-    test "when the queue does not exist" do
+    test "finds no performable job in an unknown queue" do
       %{queue: queue, scope: scope} = params_for(:job)
 
       assert {:error, :no_performable_job} =
                Jobs.acquire_next_performable_job(TestRepo, scope, queue)
     end
 
-    test "when the next pending job is scheduled for later" do
+    test "finds no performable job before the scheduled date" do
       %Job{queue: queue, scope: scope} =
         insert_pending_job!(:job, scheduled_at: utc_now() |> add(3600, :second))
 
@@ -378,14 +378,14 @@ defmodule Queuetopia.JobsTest do
                Jobs.acquire_next_performable_job(TestRepo, scope, queue)
     end
 
-    test "when the next pending job next attempt is scheduled for now" do
+    test "a due next attempt makes the job performable" do
       %Job{queue: queue, scope: scope, id: id} =
         insert_pending_job!(:job, next_attempt_at: utc_now())
 
       assert {:ok, %Job{id: ^id}} = Jobs.acquire_next_performable_job(TestRepo, scope, queue)
     end
 
-    test "when the next pending job next attempt is scheduled for later" do
+    test "a backed-off job is not performable before its next attempt" do
       %Job{queue: queue, scope: scope} =
         insert_pending_job!(:job, next_attempt_at: utc_now() |> add(3600, :second))
 
@@ -393,7 +393,7 @@ defmodule Queuetopia.JobsTest do
                Jobs.acquire_next_performable_job(TestRepo, scope, queue)
     end
 
-    test "when max job attempts is reached" do
+    test "exhausted attempts leave no performable job" do
       %Job{queue: queue, scope: scope} =
         insert_pending_job!(:job, next_attempt_at: utc_now(), attempts: 20, max_attempts: 20)
 
