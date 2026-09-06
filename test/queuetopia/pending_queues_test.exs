@@ -197,19 +197,23 @@ defmodule Queuetopia.PendingQueuesTest do
       holder =
         spawn_link(fn ->
           Ecto.Adapters.SQL.Sandbox.unboxed_run(TestRepo, fn ->
-            build(:pending_queue, scope: scope, queue: queue) |> TestRepo.insert!()
+            try do
+              build(:pending_queue, scope: scope, queue: queue) |> TestRepo.insert!()
 
-            TestRepo.transaction(fn ->
-              PendingQueues.lock_pending_queue(TestRepo, scope, queue)
-              send(test_pid, :locked)
+              TestRepo.transaction(fn ->
+                PendingQueues.lock_pending_queue(TestRepo, scope, queue)
+                send(test_pid, :locked)
 
-              receive do
-                :release -> :ok
-              end
-            end)
-
-            TestRepo.delete_all(Ecto.Query.where(PendingQueue, scope: ^scope))
-            send(test_pid, :cleaned)
+                receive do
+                  :release -> :ok
+                after
+                  10_000 -> :ok
+                end
+              end)
+            after
+              TestRepo.delete_all(Ecto.Query.where(PendingQueue, scope: ^scope))
+              send(test_pid, :cleaned)
+            end
           end)
         end)
 
