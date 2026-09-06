@@ -3,15 +3,31 @@
 ## 6.0.0 - Unreleased
 
 - New `queuetopia_pending_queues` table (migration V8): one row per queue with pending work, whose `next_performable_at` encodes both a head job scheduled later and a post-failure backoff. The migration backfills it from the existing jobs backlog.
-- The table is maintained transactionally at every job transition: `create_job` upserts the row in the same transaction as the job insert (keeping the earliest performable time), and job completion recomputes it from the queue's head job — next job's `scheduled_at` on success, the backed-off `next_attempt_at` on failure, row deleted when the queue empties. A missing row self-heals on recompute.
+- The table is maintained transactionally at every job transition: `create_job` upserts the row in the same transaction as the job insert (keeping the earliest performable time), and job completion recomputes it from the queue's head job — next job's `scheduled_at` on success, the backed-off `next_attempt_at` on failure, row deleted when the queue empties. A stale row value self-heals at the next poll; a **missing** row does not — see Upgrading from 5.x.
 - The scheduler polls this table instead of running a `DISTINCT` scan over the whole jobs backlog — poll cost is now proportional to the number of pending queues, not to the backlog size. A stale row (e.g. an optimistic `next_performable_at`) is refreshed on the spot and drops out of subsequent polls.
 - The pending row doubles as the queue's internal mutex: refreshes take it with `SELECT ... FOR UPDATE`, so a concurrent `create_job` can no longer race the delete/recompute of the same queue's row — the delete/create races are closed.
 - Claiming the next performable job happens in a single transaction (head lookup, queue lock and post-lock recheck in one Multi), removing the window between choosing a job and claiming it; empty or not-yet-performable queues short-circuit before taking a lock.
 - **Breaking:** a test seeding a bare job row must also seed the queue's pending row — the scheduler only polls the `queuetopia_pending_queues` table. `Queuetopia.Factories.build(:pending_queue, attrs)` provides the struct.
-- **Breaking:** Postgres support is removed — Queuetopia targets MySQL only. The `postgrex` dependency, the per-adapter migration branches and the Postgres upsert options are gone.
+- **Breaking:** Postgres support is removed — Queuetopia targets MySQL only, version **8.0.1 or later** (the pending-row lock uses `FOR UPDATE NOWAIT`). The `postgrex` dependency, the per-adapter migration branches and the Postgres upsert options are gone.
 - **Breaking:** `Queuetopia.Queue` is split into `Queuetopia.Jobs` (creation, claim, perform, results, cleanup), `Queuetopia.PendingQueues` (row maintenance and the poll listing) and `Queuetopia.Locks` (take, release, expire). `Queuetopia.Queue.Job` becomes `Queuetopia.Jobs.Job`; update any code referencing the old modules.
 - **Breaking:** several formerly public job predicates (`done?`, `max_attempts_reached?`, the time check) are folded into `performable_now?` or made private; the `Queue` API is narrowed to the claim/get-next surface.
 - Dependencies: `ecto`/`ecto_sql` 3.14, `myxql` 0.9 and `decimal` 3.1 — `decimal` < 3.0 is affected by CVE-2026-32686 (unbounded exponent in `Decimal.new`, DoS). Consumers must be able to take `decimal` 3.
+
+### Upgrading from 5.x
+
+The scheduler only polls `queuetopia_pending_queues`: a job whose queue has no
+pending row is never run, and 5.x producers do not write that row. The upgrade
+must be stop-the-world:
+
+1. Stop every node still on 5.x — producers included.
+2. Run the migrations (V8 to V10; the V10 backfill seeds the pending rows from
+   the jobs backlog).
+3. Start the 6.0 nodes only.
+
+A job inserted out-of-band later (raw SQL, a revived job, a straggler 5.x
+writer) has no pending row and stays invisible to the poll: run
+`Queuetopia.Migrations.V10.backfill(MyApp.Repo)` to catch up — idempotent and
+replayable at any time.
 
 ## 5.0.0 - 2026-09-01
 
