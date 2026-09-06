@@ -169,7 +169,7 @@ defmodule Queuetopia.JobsTest do
                locked_at |> DateTime.add(6_000, :millisecond) |> DateTime.truncate(:second)
     end
 
-    test "under concurrent acquires, exactly one claims the job" do
+    test "under concurrent acquires, exactly one gets the job" do
       scope = "scope_#{System.unique_integer([:positive])}"
       queue = "queue_#{System.unique_integer([:positive])}"
       test_pid = self()
