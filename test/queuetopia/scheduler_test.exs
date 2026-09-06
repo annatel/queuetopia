@@ -46,6 +46,28 @@ defmodule Queuetopia.SchedulerTest.UnlockRaisingRepo do
   def __adapter__(), do: TestRepo.__adapter__()
 end
 
+defmodule Queuetopia.SchedulerTest.ListingRaisingRepo do
+  alias Queuetopia.TestRepo
+
+  def start_flag(), do: Agent.start_link(fn -> true end, name: __MODULE__)
+
+  def all(queryable, opts \\ []) do
+    if Agent.get_and_update(__MODULE__, &{&1, false}),
+      do: raise(DBConnection.ConnectionError, "connection closed"),
+      else: TestRepo.all(queryable, opts)
+  end
+
+  def transaction(fun, opts \\ []), do: TestRepo.transaction(fun, opts)
+  def rollback(value), do: TestRepo.rollback(value)
+  def one(queryable, opts \\ []), do: TestRepo.one(queryable, opts)
+  def get(schema, id, opts \\ []), do: TestRepo.get(schema, id, opts)
+  def insert(struct, opts \\ []), do: TestRepo.insert(struct, opts)
+  def insert!(struct, opts \\ []), do: TestRepo.insert!(struct, opts)
+  def update!(struct, opts \\ []), do: TestRepo.update!(struct, opts)
+  def delete_all(queryable, opts \\ []), do: TestRepo.delete_all(queryable, opts)
+  def __adapter__(), do: TestRepo.__adapter__()
+end
+
 defmodule Queuetopia.SchedulerTest do
   use Queuetopia.DataCase
 
@@ -61,6 +83,34 @@ defmodule Queuetopia.SchedulerTest do
   setup do
     Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 50)
     :ok
+  end
+
+  test "survives a raising listing: the poll re-arms and the next cycle serves the job" do
+    scope = TestQueuetopia.scope()
+
+    %{id: job_id} = insert_pending_job!(:success_job, scope: scope)
+
+    {:ok, _} = Queuetopia.SchedulerTest.ListingRaisingRepo.start_flag()
+    start_supervised!({Task.Supervisor, name: Queuetopia.SchedulerTest.ListingRaisingRepo.Sup})
+
+    log =
+      capture_log(fn ->
+        {:ok, scheduler} =
+          Queuetopia.Scheduler.start_link(
+            repo: Queuetopia.SchedulerTest.ListingRaisingRepo,
+            scope: scope,
+            poll_interval: 50,
+            task_supervisor_name: Queuetopia.SchedulerTest.ListingRaisingRepo.Sup,
+            number_of_concurrent_jobs: nil
+          )
+
+        assert_receive {_, ^job_id, :ok}, 1_000
+        assert Process.alive?(scheduler)
+
+        GenServer.stop(scheduler)
+      end)
+
+    assert log =~ "Listing the available pending queues failed"
   end
 
   test "survives a raising poll: skips the queue for the cycle and retries it on the next one" do

@@ -156,18 +156,19 @@ defmodule Queuetopia.Scheduler do
 
     limit = number_of_concurrent_jobs && number_of_concurrent_jobs - number_of_running_jobs
 
-    jobs =
-      PendingQueues.list_available_pending_queues(repo, scope, limit: limit)
-      |> Enum.map(&run_next_performable_job(&1, task_supervisor_name, repo, scope))
-      |> Enum.reject(&is_nil(&1))
-      |> Enum.into(%{})
-      |> Map.merge(jobs)
+    started_jobs =
+      BestEffort.run("Listing the available pending queues", fn ->
+        PendingQueues.list_available_pending_queues(repo, scope, limit: limit)
+        |> Enum.map(&run_next_performable_job(&1, task_supervisor_name, repo, scope))
+        |> Enum.reject(&is_nil(&1))
+        |> Enum.into(%{})
+      end) || %{}
 
     unless one_time? do
       Process.send_after(self(), {:poll, one_time?: false}, poll_interval)
     end
 
-    jobs
+    Map.merge(jobs, started_jobs)
   end
 
   defp run_next_performable_job(
