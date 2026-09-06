@@ -27,7 +27,7 @@ defmodule Queuetopia.JobsTest do
   alias Queuetopia.Locks.Lock
 
   describe "acquire_next_performable_job/3" do
-    test "releases the claim of a job completed between its read and its lock" do
+    test "does not run a job completed between its read and its lock" do
       scope = "scope_#{System.unique_integer([:positive])}"
       queue = "queue_#{System.unique_integer([:positive])}"
       test_pid = self()
@@ -78,7 +78,7 @@ defmodule Queuetopia.JobsTest do
       assert_receive :cleaned, 1_000
     end
 
-    test "skips the claim without waiting when the job row is being written" do
+    test "skips a job whose row is being written, without waiting" do
       scope = "scope_#{System.unique_integer([:positive])}"
       queue = "queue_#{System.unique_integer([:positive])}"
       test_pid = self()
@@ -244,7 +244,7 @@ defmodule Queuetopia.JobsTest do
       assert_receive :cleaned, 1_000
     end
 
-    test "a poll miss refreshes the pending row within the claim" do
+    test "a poll miss refreshes the pending row in the same transaction" do
       utc_now = utc_now() |> DateTime.truncate(:second)
       later = utc_now |> DateTime.add(3600)
 
@@ -265,7 +265,7 @@ defmodule Queuetopia.JobsTest do
       assert DateTime.compare(refreshed, later) == :eq
     end
 
-    test "a poll miss on an emptied queue deletes the pending row within the claim" do
+    test "a poll miss on an emptied queue deletes the pending row in the same transaction" do
       %{scope: scope, queue: queue} = insert!(:pending_queue)
 
       assert {:error, :no_performable_job} =
