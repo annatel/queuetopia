@@ -57,7 +57,14 @@ defmodule Queuetopia.PendingQueues do
       end)
 
     :ok
+  rescue
+    exception ->
+      if held_row_error?(exception), do: :ok, else: reraise(exception, __STACKTRACE__)
   end
+
+  @doc false
+  def held_row_error?(%MyXQL.Error{mysql: %{code: 3572}}), do: true
+  def held_row_error?(_exception), do: false
 
   @doc false
   def lock_pending_queue(repo, scope, queue) do

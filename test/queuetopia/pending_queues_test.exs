@@ -242,6 +242,53 @@ defmodule Queuetopia.PendingQueuesTest do
     end
   end
 
+  describe "refresh_pending_queue!/3 under contention" do
+    test "silently leaves a held row alone" do
+      scope = "scope_#{System.unique_integer([:positive])}"
+      queue = "queue_#{System.unique_integer([:positive])}"
+      test_pid = self()
+
+      holder =
+        spawn_link(fn ->
+          Ecto.Adapters.SQL.Sandbox.unboxed_run(TestRepo, fn ->
+            try do
+              build(:pending_queue, scope: scope, queue: queue) |> TestRepo.insert!()
+
+              TestRepo.transaction(fn ->
+                PendingQueues.lock_pending_queue(TestRepo, scope, queue)
+                send(test_pid, :locked)
+
+                receive do
+                  :release -> :ok
+                after
+                  10_000 -> :ok
+                end
+              end)
+            after
+              TestRepo.delete_all(Ecto.Query.where(PendingQueue, scope: ^scope))
+              send(test_pid, :cleaned)
+            end
+          end)
+        end)
+
+      assert_receive :locked, 1_000
+
+      spawn_link(fn ->
+        Ecto.Adapters.SQL.Sandbox.unboxed_run(TestRepo, fn ->
+          send(
+            test_pid,
+            {:refreshed, PendingQueues.refresh_pending_queue!(TestRepo, scope, queue)}
+          )
+        end)
+      end)
+
+      assert_receive {:refreshed, :ok}, 5_000
+
+      send(holder, :release)
+      assert_receive :cleaned, 1_000
+    end
+  end
+
   defp get_pending_queue(scope, queue) do
     PendingQueue
     |> Ecto.Query.where(scope: ^scope, queue: ^queue)

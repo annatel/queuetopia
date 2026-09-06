@@ -78,6 +78,51 @@ defmodule Queuetopia.JobsTest do
       assert_receive :cleaned, 1_000
     end
 
+    test "returns locked when the pending row is held by a producer" do
+      scope = "scope_#{System.unique_integer([:positive])}"
+      queue = "queue_#{System.unique_integer([:positive])}"
+      test_pid = self()
+
+      holder =
+        spawn_link(fn ->
+          Ecto.Adapters.SQL.Sandbox.unboxed_run(TestRepo, fn ->
+            try do
+              build(:pending_queue, scope: scope, queue: queue) |> TestRepo.insert!()
+
+              TestRepo.transaction(fn ->
+                Queuetopia.PendingQueues.lock_pending_queue(TestRepo, scope, queue)
+                send(test_pid, :locked)
+
+                receive do
+                  :release -> :ok
+                after
+                  10_000 -> :ok
+                end
+              end)
+            after
+              TestRepo.delete_all(
+                Ecto.Query.where(Queuetopia.PendingQueues.PendingQueue, scope: ^scope)
+              )
+
+              send(test_pid, :cleaned)
+            end
+          end)
+        end)
+
+      assert_receive :locked, 1_000
+
+      spawn_link(fn ->
+        Ecto.Adapters.SQL.Sandbox.unboxed_run(TestRepo, fn ->
+          send(test_pid, {:acquired, Jobs.acquire_next_performable_job(TestRepo, scope, queue)})
+        end)
+      end)
+
+      assert_receive {:acquired, {:error, :locked}}, 5_000
+
+      send(holder, :release)
+      assert_receive :cleaned, 1_000
+    end
+
     test "acquires the next performable job and locks the queue" do
       %{id: id, queue: queue, scope: scope} = insert_pending_job!(:job, scheduled_at: utc_now())
       insert_pending_job!(:job, queue: queue, scope: scope, scheduled_at: utc_now() |> add(60))
@@ -134,16 +179,7 @@ defmodule Queuetopia.JobsTest do
               :go -> :ok
             end
 
-            result =
-              try do
-                Jobs.acquire_next_performable_job(TestRepo, scope, queue)
-              rescue
-                error in MyXQL.Error ->
-                  assert Exception.message(error) =~ "NOWAIT"
-                  {:error, :nowait}
-              end
-
-            send(test_pid, {:acquired, result})
+            send(test_pid, {:acquired, Jobs.acquire_next_performable_job(TestRepo, scope, queue)})
           end)
         end)
       end
@@ -164,9 +200,7 @@ defmodule Queuetopia.JobsTest do
 
       assert Enum.count(results, &match?({:ok, %Job{}}, &1)) == 1
 
-      assert Enum.reject(results, &match?({:ok, _}, &1))
-             |> Enum.uniq()
-             |> Enum.all?(&(&1 in [{:error, :locked}, {:error, :nowait}]))
+      assert Enum.reject(results, &match?({:ok, _}, &1)) |> Enum.uniq() == [{:error, :locked}]
 
       assert [%Lock{}] = TestRepo.all(Ecto.Query.where(Lock, scope: ^scope))
 
@@ -358,7 +392,7 @@ defmodule Queuetopia.JobsTest do
       assert_receive {:persisted, %Job{} = done_job, log}, 5_000
       refute is_nil(done_job.done_at)
       assert is_nil(done_job.error)
-      assert log =~ "Refreshing the pending queue"
+      refute log =~ "Refreshing the pending queue"
 
       send(holder, :release)
       assert_receive :cleaned, 1_000
