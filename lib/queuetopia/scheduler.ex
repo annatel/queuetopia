@@ -82,7 +82,7 @@ defmodule Queuetopia.Scheduler do
     job = Map.get(jobs, ref)
     :ok = handle_task_result(repo, job, {:error, inspect(reason)})
 
-    Locks.unlock_queue(repo, scope, job.queue)
+    unlock_queue(repo, scope, job.queue)
     {:noreply, %{state | jobs: Map.delete(jobs, ref)}}
   end
 
@@ -101,7 +101,7 @@ defmodule Queuetopia.Scheduler do
     job = Map.get(jobs, ref)
     :ok = handle_task_result(repo, job, task_result)
 
-    Locks.unlock_queue(repo, scope, job.queue)
+    unlock_queue(repo, scope, job.queue)
 
     send_poll(self())
 
@@ -130,12 +130,29 @@ defmodule Queuetopia.Scheduler do
               :exit, reason ->
                 {:error, "#{inspect(reason)}"}
             end) do
-      job
-      |> Ecto.Changeset.change(
-        error: "Handle_failed_job error:" <> error <> " Job error:" <> inspect(result)
-      )
-      |> repo.update!()
+      best_effort("Recording the error of the job #{job.id}", fn ->
+        job
+        |> Ecto.Changeset.change(
+          error: "Handle_failed_job error:" <> error <> " Job error:" <> inspect(result)
+        )
+        |> repo.update!()
+      end)
     end
+  end
+
+  defp unlock_queue(repo, scope, queue) do
+    best_effort("Unlocking the queue #{queue}", fn ->
+      Locks.unlock_queue(repo, scope, queue)
+    end)
+  end
+
+  defp best_effort(label, fun) do
+    fun.()
+  rescue
+    exception ->
+      Logger.error(label <> " failed: " <> Exception.format(:error, exception, __STACKTRACE__))
+
+      nil
   end
 
   defp poll_queues(task_supervisor_name, poll_interval, repo, scope, jobs, opts) do
@@ -143,7 +160,10 @@ defmodule Queuetopia.Scheduler do
     number_of_concurrent_jobs = Keyword.fetch!(opts, :number_of_concurrent_jobs)
     number_of_running_jobs = Enum.count(jobs)
 
-    Locks.release_expired_locks(repo, scope)
+    best_effort("Releasing the expired locks", fn ->
+      Locks.release_expired_locks(repo, scope)
+    end)
+
     limit = number_of_concurrent_jobs && number_of_concurrent_jobs - number_of_running_jobs
 
     jobs =

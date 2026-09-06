@@ -19,6 +19,33 @@ defmodule Queuetopia.SchedulerTest.RaisingOnceRepo do
   def __adapter__(), do: TestRepo.__adapter__()
 end
 
+defmodule Queuetopia.SchedulerTest.UnlockRaisingRepo do
+  alias Queuetopia.TestRepo
+
+  def start_flag(), do: Agent.start_link(fn -> false end, name: __MODULE__)
+
+  def update!(changeset, opts \\ []) do
+    result = TestRepo.update!(changeset, opts)
+    Agent.update(__MODULE__, fn _ -> true end)
+    result
+  end
+
+  def delete_all(queryable, opts \\ []) do
+    if Agent.get_and_update(__MODULE__, &{&1, false}),
+      do: raise(DBConnection.ConnectionError, "connection closed"),
+      else: TestRepo.delete_all(queryable, opts)
+  end
+
+  def transaction(fun, opts \\ []), do: TestRepo.transaction(fun, opts)
+  def rollback(value), do: TestRepo.rollback(value)
+  def all(queryable, opts \\ []), do: TestRepo.all(queryable, opts)
+  def one(queryable, opts \\ []), do: TestRepo.one(queryable, opts)
+  def get(schema, id, opts \\ []), do: TestRepo.get(schema, id, opts)
+  def insert(struct, opts \\ []), do: TestRepo.insert(struct, opts)
+  def insert!(struct, opts \\ []), do: TestRepo.insert!(struct, opts)
+  def __adapter__(), do: TestRepo.__adapter__()
+end
+
 defmodule Queuetopia.SchedulerTest do
   use Queuetopia.DataCase
 
@@ -65,6 +92,40 @@ defmodule Queuetopia.SchedulerTest do
 
     assert log =~ "Polling the queue"
     assert log =~ "connection closed"
+  end
+
+  test "survives a raising unlock: the result is persisted and the queue restarts after the lock TTL" do
+    scope = TestQueuetopia.scope()
+
+    %{id: job_id_1, queue: queue} = insert_pending_job!(:success_job, scope: scope, timeout: 100)
+
+    %{id: job_id_2} =
+      insert_pending_job!(:success_job, scope: scope, queue: queue, timeout: 100)
+
+    {:ok, _} = Queuetopia.SchedulerTest.UnlockRaisingRepo.start_flag()
+    start_supervised!({Task.Supervisor, name: Queuetopia.SchedulerTest.UnlockRaisingRepo.Sup})
+
+    log =
+      capture_log(fn ->
+        {:ok, scheduler} =
+          Queuetopia.Scheduler.start_link(
+            repo: Queuetopia.SchedulerTest.UnlockRaisingRepo,
+            scope: scope,
+            poll_interval: 50,
+            task_supervisor_name: Queuetopia.SchedulerTest.UnlockRaisingRepo.Sup,
+            number_of_concurrent_jobs: nil
+          )
+
+        assert_receive {_, ^job_id_1, :ok}, 1_000
+        assert_receive {_, ^job_id_2, :ok}, 3_000
+        assert Process.alive?(scheduler)
+
+        refute is_nil(TestRepo.get(Job, job_id_1).done_at)
+
+        GenServer.stop(scheduler)
+      end)
+
+    assert log =~ "Unlocking the queue #{queue} failed"
   end
 
   test "poll only available queues" do
