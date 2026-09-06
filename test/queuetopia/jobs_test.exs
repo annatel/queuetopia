@@ -85,6 +85,8 @@ defmodule Queuetopia.JobsTest do
 
       holder =
         spawn_link(fn ->
+          test_ref = Process.monitor(test_pid)
+
           Ecto.Adapters.SQL.Sandbox.unboxed_run(TestRepo, fn ->
             try do
               build(:pending_queue, scope: scope, queue: queue) |> TestRepo.insert!()
@@ -95,6 +97,7 @@ defmodule Queuetopia.JobsTest do
 
                 receive do
                   :release -> :ok
+                  {:DOWN, ^test_ref, :process, _, _} -> :ok
                 after
                   10_000 -> :ok
                 end
@@ -144,6 +147,8 @@ defmodule Queuetopia.JobsTest do
 
       holder =
         spawn_link(fn ->
+          test_ref = Process.monitor(test_pid)
+
           Ecto.Adapters.SQL.Sandbox.unboxed_run(TestRepo, fn ->
             try do
               insert_pending_job!(:job, scope: scope, queue: queue)
@@ -151,6 +156,7 @@ defmodule Queuetopia.JobsTest do
 
               receive do
                 :release -> :ok
+                {:DOWN, ^test_ref, :process, _, _} -> :ok
               after
                 10_000 -> :ok
               end
@@ -347,6 +353,8 @@ defmodule Queuetopia.JobsTest do
 
       holder =
         spawn_link(fn ->
+          test_ref = Process.monitor(test_pid)
+
           Ecto.Adapters.SQL.Sandbox.unboxed_run(TestRepo, fn ->
             try do
               job = insert_pending_job!(:success_job, scope: scope, queue: queue)
@@ -358,6 +366,7 @@ defmodule Queuetopia.JobsTest do
 
                 receive do
                   :release -> :ok
+                  {:DOWN, ^test_ref, :process, _, _} -> :ok
                 after
                   10_000 -> :ok
                 end

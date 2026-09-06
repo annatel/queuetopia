@@ -128,6 +128,29 @@ defmodule Queuetopia.SchedulerTest do
     assert log =~ "Unlocking the queue #{queue} failed"
   end
 
+  test "queues in backoff cost nothing: the lone performable job runs at the first poll" do
+    scope = TestQueuetopia.scope()
+    utc_now = DateTime.utc_now() |> DateTime.truncate(:second)
+    in_two_hours = DateTime.add(utc_now, 7200)
+
+    for _ <- 1..2 do
+      %{queue: queue} =
+        insert!(:success_job, scope: scope, next_attempt_at: in_two_hours, attempts: 1)
+
+      for _ <- 1..99, do: insert!(:success_job, scope: scope, queue: queue)
+
+      build(:pending_queue, scope: scope, queue: queue, next_performable_at: in_two_hours)
+      |> TestRepo.insert!()
+    end
+
+    %{id: performable_id} = insert_pending_job!(:success_job, scope: scope)
+
+    start_supervised!(TestQueuetopia)
+
+    assert_receive {_, ^performable_id, :ok}, 1_000
+    refute_receive {_, _, :ok}, 100
+  end
+
   test "poll only available queues" do
     scope = TestQueuetopia.scope()
 

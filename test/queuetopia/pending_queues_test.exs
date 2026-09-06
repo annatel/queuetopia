@@ -36,6 +36,26 @@ defmodule Queuetopia.PendingQueuesTest do
       assert [_] = PendingQueues.list_available_pending_queues(TestRepo, scope, limit: 1)
     end
 
+    test "always serves the longest-due queue within the limit" do
+      scope = "scope_#{System.unique_integer([:positive])}"
+      utc_now = utc_now() |> DateTime.truncate(:second)
+
+      %{queue: longest_due_queue} =
+        build(:pending_queue, scope: scope, next_performable_at: DateTime.add(utc_now, -60))
+        |> TestRepo.insert!()
+
+      for _ <- 1..10 do
+        build(:pending_queue, scope: scope, next_performable_at: utc_now)
+        |> TestRepo.insert!()
+      end
+
+      for _ <- 1..20 do
+        assert longest_due_queue in PendingQueues.list_available_pending_queues(TestRepo, scope,
+                 limit: 2
+               )
+      end
+    end
+
     test "when a queue is locked" do
       %{queue: queue_1, scope: scope_1} = insert_pending_job!(:job)
       _ = insert!(:lock, queue: queue_1, scope: scope_1)
@@ -196,6 +216,8 @@ defmodule Queuetopia.PendingQueuesTest do
 
       holder =
         spawn_link(fn ->
+          test_ref = Process.monitor(test_pid)
+
           Ecto.Adapters.SQL.Sandbox.unboxed_run(TestRepo, fn ->
             try do
               build(:pending_queue, scope: scope, queue: queue) |> TestRepo.insert!()
@@ -206,6 +228,7 @@ defmodule Queuetopia.PendingQueuesTest do
 
                 receive do
                   :release -> :ok
+                  {:DOWN, ^test_ref, :process, _, _} -> :ok
                 after
                   10_000 -> :ok
                 end
@@ -250,6 +273,8 @@ defmodule Queuetopia.PendingQueuesTest do
 
       holder =
         spawn_link(fn ->
+          test_ref = Process.monitor(test_pid)
+
           Ecto.Adapters.SQL.Sandbox.unboxed_run(TestRepo, fn ->
             try do
               build(:pending_queue, scope: scope, queue: queue) |> TestRepo.insert!()
@@ -260,6 +285,7 @@ defmodule Queuetopia.PendingQueuesTest do
 
                 receive do
                   :release -> :ok
+                  {:DOWN, ^test_ref, :process, _, _} -> :ok
                 after
                   10_000 -> :ok
                 end

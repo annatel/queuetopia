@@ -63,7 +63,7 @@ defmodule Queuetopia.PendingQueues do
   end
 
   @doc false
-  def held_row_error?(%MyXQL.Error{mysql: %{code: 3572}}), do: true
+  def held_row_error?(%{__struct__: MyXQL.Error, mysql: %{code: 3572}}), do: true
   def held_row_error?(_exception), do: false
 
   @doc false
@@ -99,7 +99,7 @@ defmodule Queuetopia.PendingQueues do
   end
 
   defp query_limit(query, limit) when is_integer(limit),
-    do: query |> limit(^limit) |> order_by(asc: fragment("RAND()"))
+    do: query |> limit(^limit) |> order_by(asc: :next_performable_at)
 
   defp query_limit(query, nil), do: query
 end
