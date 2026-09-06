@@ -78,6 +78,63 @@ defmodule Queuetopia.JobsTest do
       assert_receive :cleaned, 1_000
     end
 
+    test "skips the claim without waiting when the job row is being written" do
+      scope = "scope_#{System.unique_integer([:positive])}"
+      queue = "queue_#{System.unique_integer([:positive])}"
+      test_pid = self()
+
+      holder =
+        spawn_link(fn ->
+          test_ref = Process.monitor(test_pid)
+
+          Ecto.Adapters.SQL.Sandbox.unboxed_run(TestRepo, fn ->
+            try do
+              job = insert_pending_job!(:success_job, scope: scope, queue: queue)
+
+              TestRepo.transaction(fn ->
+                TestRepo.update_all(Ecto.Query.where(Job, id: ^job.id), set: [attempts: 1])
+                send(test_pid, :held)
+
+                receive do
+                  :release -> :ok
+                  {:DOWN, ^test_ref, :process, _, _} -> :ok
+                after
+                  10_000 -> :ok
+                end
+              end)
+            after
+              TestRepo.delete_all(Ecto.Query.where(Job, scope: ^scope))
+
+              TestRepo.delete_all(
+                Ecto.Query.where(Queuetopia.PendingQueues.PendingQueue, scope: ^scope)
+              )
+
+              TestRepo.delete_all(Ecto.Query.where(Lock, scope: ^scope))
+              TestRepo.query!("UPDATE queuetopia_sequences SET sequence = sequence - 1")
+              send(test_pid, :cleaned)
+            end
+          end)
+        end)
+
+      assert_receive :held, 1_000
+
+      spawn_link(fn ->
+        Ecto.Adapters.SQL.Sandbox.unboxed_run(TestRepo, fn ->
+          {elapsed_us, result} =
+            :timer.tc(fn -> Jobs.acquire_next_performable_job(TestRepo, scope, queue) end)
+
+          lock = TestRepo.get_by(Lock, scope: scope, queue: queue)
+          send(test_pid, {:acquired, elapsed_us, result, lock})
+        end)
+      end)
+
+      assert_receive {:acquired, elapsed_us, {:error, :no_performable_job}, nil}, 5_000
+      assert elapsed_us < 1_000_000
+
+      send(holder, :release)
+      assert_receive :cleaned, 1_000
+    end
+
     test "returns locked when the pending row is held by a producer" do
       scope = "scope_#{System.unique_integer([:positive])}"
       queue = "queue_#{System.unique_integer([:positive])}"

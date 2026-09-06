@@ -54,8 +54,9 @@ defmodule Queuetopia.PendingQueues do
     end
   end
 
-  defp held_row_error?(%{__struct__: MyXQL.Error, mysql: %{code: 3572}}), do: true
-  defp held_row_error?(_exception), do: false
+  @doc false
+  def held_row_error?(%{__struct__: MyXQL.Error, mysql: %{code: 3572}}), do: true
+  def held_row_error?(_exception), do: false
 
   @doc false
   @spec refresh_held_pending_queue!(module, binary, binary) :: :ok

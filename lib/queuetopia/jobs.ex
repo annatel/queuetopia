@@ -135,7 +135,7 @@ defmodule Queuetopia.Jobs do
     fresh_job =
       Job
       |> where(id: ^id)
-      |> lock("FOR SHARE")
+      |> lock("FOR SHARE NOWAIT")
       |> repo.one()
 
     case fresh_job do
@@ -145,6 +145,11 @@ defmodule Queuetopia.Jobs do
       nil ->
         repo.rollback(:no_performable_job)
     end
+  rescue
+    exception ->
+      if PendingQueues.held_row_error?(exception),
+        do: repo.rollback(:no_performable_job),
+        else: reraise(exception, __STACKTRACE__)
   end
 
   @doc false
