@@ -214,6 +214,39 @@ defmodule Queuetopia.JobsTest do
       assert_receive :cleaned, 1_000
     end
 
+    test "a poll miss refreshes the pending row within the claim" do
+      utc_now = utc_now() |> DateTime.truncate(:second)
+      later = utc_now |> DateTime.add(3600)
+
+      %{queue: queue, scope: scope} = insert!(:job, scheduled_at: later)
+
+      build(:pending_queue,
+        scope: scope,
+        queue: queue,
+        next_performable_at: DateTime.add(utc_now, -60)
+      )
+      |> TestRepo.insert!()
+
+      assert {:error, :no_performable_job} =
+               Jobs.acquire_next_performable_job(TestRepo, scope, queue)
+
+      assert %Queuetopia.PendingQueues.PendingQueue{next_performable_at: refreshed} =
+               TestRepo.get_by(Queuetopia.PendingQueues.PendingQueue, scope: scope, queue: queue)
+
+      assert DateTime.compare(refreshed, later) == :eq
+    end
+
+    test "a poll miss on an emptied queue deletes the pending row within the claim" do
+      %{scope: scope, queue: queue} = build(:pending_queue) |> TestRepo.insert!()
+
+      assert {:error, :no_performable_job} =
+               Jobs.acquire_next_performable_job(TestRepo, scope, queue)
+
+      assert is_nil(
+               TestRepo.get_by(Queuetopia.PendingQueues.PendingQueue, scope: scope, queue: queue)
+             )
+    end
+
     test "when the queue has an expired lock, still returns an error" do
       %{queue: queue, scope: scope} = insert_pending_job!(:job, scheduled_at: utc_now())
       insert!(:expired_lock, scope: scope, queue: queue)

@@ -193,10 +193,6 @@ defmodule Queuetopia.Scheduler do
         Process.send_after(self(), {:kill, task}, job.timeout)
         {task.ref, job}
 
-      {:error, :no_performable_job} ->
-        PendingQueues.refresh_pending_queue!(repo, scope, queue)
-        nil
-
       {:error, _} ->
         nil
     end

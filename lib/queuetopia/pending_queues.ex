@@ -47,13 +47,7 @@ defmodule Queuetopia.PendingQueues do
     {:ok, :ok} =
       repo.transaction(fn ->
         lock_pending_queue(repo, scope, queue)
-
-        case Jobs.get_next_job(repo, scope, queue) do
-          %Job{} = job -> update_pending_queue!(repo, job)
-          nil -> delete_pending_queue(repo, scope, queue)
-        end
-
-        :ok
+        refresh_held_pending_queue!(repo, scope, queue)
       end)
 
     :ok
@@ -65,6 +59,17 @@ defmodule Queuetopia.PendingQueues do
   @doc false
   def held_row_error?(%{__struct__: MyXQL.Error, mysql: %{code: 3572}}), do: true
   def held_row_error?(_exception), do: false
+
+  @doc false
+  @spec refresh_held_pending_queue!(module, binary, binary) :: :ok
+  def refresh_held_pending_queue!(repo, scope, queue) do
+    case Jobs.get_next_job(repo, scope, queue) do
+      %Job{} = job -> update_pending_queue!(repo, job)
+      nil -> delete_pending_queue(repo, scope, queue)
+    end
+
+    :ok
+  end
 
   @doc false
   def lock_pending_queue(repo, scope, queue) do

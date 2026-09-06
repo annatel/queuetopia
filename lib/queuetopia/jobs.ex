@@ -117,8 +117,12 @@ defmodule Queuetopia.Jobs do
            {:ok, _lock} <- Locks.lock_queue(repo, scope, queue, job.timeout) do
         recheck_acquired_job!(repo, job)
       else
-        {:error, :locked} -> {:error, :locked}
-        _ -> {:error, :no_performable_job}
+        {:error, :locked} ->
+          {:error, :locked}
+
+        _ ->
+          PendingQueues.refresh_held_pending_queue!(repo, scope, queue)
+          {:error, :no_performable_job}
       end
     end)
     |> case do
