@@ -209,7 +209,7 @@ defmodule Queuetopia.PendingQueuesTest do
   end
 
   describe "lock_pending_queue/3" do
-    test "fails immediately instead of waiting behind a held row" do
+    test "aborts the transaction immediately instead of waiting behind a held row" do
       scope = "scope_#{System.unique_integer([:positive])}"
       queue = "queue_#{System.unique_integer([:positive])}"
       test_pid = self()
@@ -244,20 +244,18 @@ defmodule Queuetopia.PendingQueuesTest do
 
       spawn_link(fn ->
         Ecto.Adapters.SQL.Sandbox.unboxed_run(TestRepo, fn ->
-          {elapsed_us, _} =
+          {elapsed_us, result} =
             :timer.tc(fn ->
-              assert_raise MyXQL.Error, ~r/NOWAIT/, fn ->
-                TestRepo.transaction(fn ->
-                  PendingQueues.lock_pending_queue(TestRepo, scope, queue)
-                end)
-              end
+              TestRepo.transaction(fn ->
+                PendingQueues.lock_pending_queue(TestRepo, scope, queue)
+              end)
             end)
 
-          send(test_pid, {:contended, elapsed_us})
+          send(test_pid, {:contended, elapsed_us, result})
         end)
       end)
 
-      assert_receive {:contended, elapsed_us}, 5_000
+      assert_receive {:contended, elapsed_us, {:error, :held_pending_queue}}, 5_000
       assert elapsed_us < 1_000_000
 
       send(holder, :release)

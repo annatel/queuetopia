@@ -44,21 +44,18 @@ defmodule Queuetopia.PendingQueues do
   @doc false
   @spec refresh_pending_queue!(module, binary, binary) :: :ok
   def refresh_pending_queue!(repo, scope, queue) do
-    {:ok, :ok} =
-      repo.transaction(fn ->
-        lock_pending_queue(repo, scope, queue)
-        refresh_held_pending_queue!(repo, scope, queue)
-      end)
-
-    :ok
-  rescue
-    exception ->
-      if held_row_error?(exception), do: :ok, else: reraise(exception, __STACKTRACE__)
+    repo.transaction(fn ->
+      lock_pending_queue(repo, scope, queue)
+      refresh_held_pending_queue!(repo, scope, queue)
+    end)
+    |> case do
+      {:ok, :ok} -> :ok
+      {:error, :held_pending_queue} -> :ok
+    end
   end
 
-  @doc false
-  def held_row_error?(%{__struct__: MyXQL.Error, mysql: %{code: 3572}}), do: true
-  def held_row_error?(_exception), do: false
+  defp held_row_error?(%{__struct__: MyXQL.Error, mysql: %{code: 3572}}), do: true
+  defp held_row_error?(_exception), do: false
 
   @doc false
   @spec refresh_held_pending_queue!(module, binary, binary) :: :ok
@@ -77,6 +74,11 @@ defmodule Queuetopia.PendingQueues do
     |> PendingQueueQueryable.filter(scope: scope, queue: queue)
     |> lock("FOR UPDATE NOWAIT")
     |> repo.one()
+  rescue
+    exception ->
+      if held_row_error?(exception),
+        do: repo.rollback(:held_pending_queue),
+        else: reraise(exception, __STACKTRACE__)
   end
 
   defp delete_pending_queue(repo, scope, queue) do

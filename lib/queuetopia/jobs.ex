@@ -127,13 +127,9 @@ defmodule Queuetopia.Jobs do
     end)
     |> case do
       {:ok, result} -> result
+      {:error, :held_pending_queue} -> {:error, :locked}
       {:error, reason} -> {:error, reason}
     end
-  rescue
-    exception ->
-      if PendingQueues.held_row_error?(exception),
-        do: {:error, :locked},
-        else: reraise(exception, __STACKTRACE__)
   end
 
   defp recheck_acquired_job!(repo, %Job{id: id}) do
