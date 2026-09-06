@@ -20,25 +20,25 @@ defmodule Queuetopia.PendingQueues do
         ]
       )
 
-    %PendingQueue{}
-    |> PendingQueue.changeset(%{
-      scope: job.scope,
-      queue: job.queue,
-      next_performable_at: scheduled_at
-    })
-    |> repo.insert!(on_conflict: on_conflict)
+    write_pending_queue!(repo, job, scheduled_at, on_conflict)
   end
 
   defp update_pending_queue!(repo, %Job{} = job) do
     next_performable_at = Jobs.next_performable_at(job)
 
+    write_pending_queue!(repo, job, next_performable_at,
+      set: [next_performable_at: next_performable_at]
+    )
+  end
+
+  defp write_pending_queue!(repo, %Job{} = job, next_performable_at, on_conflict) do
     %PendingQueue{}
     |> PendingQueue.changeset(%{
       scope: job.scope,
       queue: job.queue,
       next_performable_at: next_performable_at
     })
-    |> repo.insert!(on_conflict: [set: [next_performable_at: next_performable_at]])
+    |> repo.insert!(on_conflict: on_conflict)
   end
 
   @doc false
