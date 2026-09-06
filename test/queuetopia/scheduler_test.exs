@@ -139,8 +139,7 @@ defmodule Queuetopia.SchedulerTest do
 
       for _ <- 1..99, do: insert!(:success_job, scope: scope, queue: queue)
 
-      build(:pending_queue, scope: scope, queue: queue, next_performable_at: in_two_hours)
-      |> TestRepo.insert!()
+      insert!(:pending_queue, scope: scope, queue: queue, next_performable_at: in_two_hours)
     end
 
     %{id: performable_id} = insert_pending_job!(:success_job, scope: scope)

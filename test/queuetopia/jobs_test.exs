@@ -83,34 +83,7 @@ defmodule Queuetopia.JobsTest do
       queue = "queue_#{System.unique_integer([:positive])}"
       test_pid = self()
 
-      holder =
-        spawn_link(fn ->
-          test_ref = Process.monitor(test_pid)
-
-          Ecto.Adapters.SQL.Sandbox.unboxed_run(TestRepo, fn ->
-            try do
-              build(:pending_queue, scope: scope, queue: queue) |> TestRepo.insert!()
-
-              TestRepo.transaction(fn ->
-                Queuetopia.PendingQueues.lock_pending_queue(TestRepo, scope, queue)
-                send(test_pid, :locked)
-
-                receive do
-                  :release -> :ok
-                  {:DOWN, ^test_ref, :process, _, _} -> :ok
-                after
-                  10_000 -> :ok
-                end
-              end)
-            after
-              TestRepo.delete_all(
-                Ecto.Query.where(Queuetopia.PendingQueues.PendingQueue, scope: ^scope)
-              )
-
-              send(test_pid, :cleaned)
-            end
-          end)
-        end)
+      holder = Queuetopia.HeldPendingQueue.hold(scope, queue, test_pid)
 
       assert_receive :locked, 1_000
 
@@ -220,12 +193,11 @@ defmodule Queuetopia.JobsTest do
 
       %{queue: queue, scope: scope} = insert!(:job, scheduled_at: later)
 
-      build(:pending_queue,
+      insert!(:pending_queue,
         scope: scope,
         queue: queue,
         next_performable_at: DateTime.add(utc_now, -60)
       )
-      |> TestRepo.insert!()
 
       assert {:error, :no_performable_job} =
                Jobs.acquire_next_performable_job(TestRepo, scope, queue)
@@ -237,7 +209,7 @@ defmodule Queuetopia.JobsTest do
     end
 
     test "a poll miss on an emptied queue deletes the pending row within the claim" do
-      %{scope: scope, queue: queue} = build(:pending_queue) |> TestRepo.insert!()
+      %{scope: scope, queue: queue} = insert!(:pending_queue)
 
       assert {:error, :no_performable_job} =
                Jobs.acquire_next_performable_job(TestRepo, scope, queue)

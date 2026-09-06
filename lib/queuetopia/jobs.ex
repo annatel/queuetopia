@@ -3,8 +3,7 @@ defmodule Queuetopia.Jobs do
 
   import Ecto.Query
 
-  require Logger
-
+  alias Queuetopia.BestEffort
   alias Queuetopia.Jobs.Job
   alias Queuetopia.Locks
   alias Queuetopia.PendingQueues
@@ -208,13 +207,9 @@ defmodule Queuetopia.Jobs do
   end
 
   defp refresh_pending_queue(repo, %Job{} = job) do
-    PendingQueues.refresh_pending_queue!(repo, job.scope, job.queue)
-  rescue
-    exception ->
-      Logger.error(
-        "Refreshing the pending queue #{job.queue} failed: " <>
-          Exception.format(:error, exception, __STACKTRACE__)
-      )
+    BestEffort.run("Refreshing the pending queue #{job.queue}", fn ->
+      PendingQueues.refresh_pending_queue!(repo, job.scope, job.queue)
+    end)
   end
 
   defp resolve_performer(%Job{scope: scope}) do

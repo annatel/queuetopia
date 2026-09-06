@@ -83,12 +83,11 @@ defmodule Queuetopia.Migrations.V10Test do
       scope = unique_scope()
       %{queue: queue, scheduled_at: scheduled_at} = insert!(:job, scope: scope)
 
-      build(:pending_queue,
+      insert!(:pending_queue,
         scope: scope,
         queue: queue,
         next_performable_at: scheduled_at |> add(3600) |> truncate()
       )
-      |> TestRepo.insert!()
 
       assert :ok = V10.backfill(TestRepo)
 
@@ -101,8 +100,7 @@ defmodule Queuetopia.Migrations.V10Test do
       %{queue: queue, scheduled_at: scheduled_at} = insert!(:job, scope: scope)
       earlier_at = scheduled_at |> add(-3600) |> truncate()
 
-      build(:pending_queue, scope: scope, queue: queue, next_performable_at: earlier_at)
-      |> TestRepo.insert!()
+      insert!(:pending_queue, scope: scope, queue: queue, next_performable_at: earlier_at)
 
       assert :ok = V10.backfill(TestRepo)
 

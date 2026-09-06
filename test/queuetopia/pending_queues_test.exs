@@ -41,12 +41,10 @@ defmodule Queuetopia.PendingQueuesTest do
       utc_now = utc_now() |> DateTime.truncate(:second)
 
       %{queue: longest_due_queue} =
-        build(:pending_queue, scope: scope, next_performable_at: DateTime.add(utc_now, -60))
-        |> TestRepo.insert!()
+        insert!(:pending_queue, scope: scope, next_performable_at: DateTime.add(utc_now, -60))
 
       for _ <- 1..10 do
-        build(:pending_queue, scope: scope, next_performable_at: utc_now)
-        |> TestRepo.insert!()
+        insert!(:pending_queue, scope: scope, next_performable_at: utc_now)
       end
 
       for _ <- 1..20 do
@@ -214,31 +212,7 @@ defmodule Queuetopia.PendingQueuesTest do
       queue = "queue_#{System.unique_integer([:positive])}"
       test_pid = self()
 
-      holder =
-        spawn_link(fn ->
-          test_ref = Process.monitor(test_pid)
-
-          Ecto.Adapters.SQL.Sandbox.unboxed_run(TestRepo, fn ->
-            try do
-              build(:pending_queue, scope: scope, queue: queue) |> TestRepo.insert!()
-
-              TestRepo.transaction(fn ->
-                PendingQueues.lock_pending_queue(TestRepo, scope, queue)
-                send(test_pid, :locked)
-
-                receive do
-                  :release -> :ok
-                  {:DOWN, ^test_ref, :process, _, _} -> :ok
-                after
-                  10_000 -> :ok
-                end
-              end)
-            after
-              TestRepo.delete_all(Ecto.Query.where(PendingQueue, scope: ^scope))
-              send(test_pid, :cleaned)
-            end
-          end)
-        end)
+      holder = Queuetopia.HeldPendingQueue.hold(scope, queue, test_pid)
 
       assert_receive :locked, 1_000
 
@@ -269,31 +243,7 @@ defmodule Queuetopia.PendingQueuesTest do
       queue = "queue_#{System.unique_integer([:positive])}"
       test_pid = self()
 
-      holder =
-        spawn_link(fn ->
-          test_ref = Process.monitor(test_pid)
-
-          Ecto.Adapters.SQL.Sandbox.unboxed_run(TestRepo, fn ->
-            try do
-              build(:pending_queue, scope: scope, queue: queue) |> TestRepo.insert!()
-
-              TestRepo.transaction(fn ->
-                PendingQueues.lock_pending_queue(TestRepo, scope, queue)
-                send(test_pid, :locked)
-
-                receive do
-                  :release -> :ok
-                  {:DOWN, ^test_ref, :process, _, _} -> :ok
-                after
-                  10_000 -> :ok
-                end
-              end)
-            after
-              TestRepo.delete_all(Ecto.Query.where(PendingQueue, scope: ^scope))
-              send(test_pid, :cleaned)
-            end
-          end)
-        end)
+      holder = Queuetopia.HeldPendingQueue.hold(scope, queue, test_pid)
 
       assert_receive :locked, 1_000
 

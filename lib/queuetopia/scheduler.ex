@@ -3,8 +3,7 @@ defmodule Queuetopia.Scheduler do
 
   use GenServer
 
-  require Logger
-
+  alias Queuetopia.BestEffort
   alias Queuetopia.Jobs
   alias Queuetopia.Locks
   alias Queuetopia.PendingQueues
@@ -130,7 +129,7 @@ defmodule Queuetopia.Scheduler do
               :exit, reason ->
                 {:error, "#{inspect(reason)}"}
             end) do
-      best_effort("Recording the error of the job #{job.id}", fn ->
+      BestEffort.run("Recording the error of the job #{job.id}", fn ->
         job
         |> Ecto.Changeset.change(
           error: "Handle_failed_job error:" <> error <> " Job error:" <> inspect(result)
@@ -141,18 +140,9 @@ defmodule Queuetopia.Scheduler do
   end
 
   defp unlock_queue(repo, scope, queue) do
-    best_effort("Unlocking the queue #{queue}", fn ->
+    BestEffort.run("Unlocking the queue #{queue}", fn ->
       Locks.unlock_queue(repo, scope, queue)
     end)
-  end
-
-  defp best_effort(label, fun) do
-    fun.()
-  rescue
-    exception ->
-      Logger.error(label <> " failed: " <> Exception.format(:error, exception, __STACKTRACE__))
-
-      nil
   end
 
   defp poll_queues(task_supervisor_name, poll_interval, repo, scope, jobs, opts) do
@@ -160,7 +150,7 @@ defmodule Queuetopia.Scheduler do
     number_of_concurrent_jobs = Keyword.fetch!(opts, :number_of_concurrent_jobs)
     number_of_running_jobs = Enum.count(jobs)
 
-    best_effort("Releasing the expired locks", fn ->
+    BestEffort.run("Releasing the expired locks", fn ->
       Locks.release_expired_locks(repo, scope)
     end)
 
@@ -186,23 +176,17 @@ defmodule Queuetopia.Scheduler do
          repo,
          scope
        ) do
-    case Jobs.acquire_next_performable_job(repo, scope, queue) do
-      {:ok, job} ->
-        task = Task.Supervisor.async_nolink(task_supervisor_name, Jobs, :perform, [job])
+    BestEffort.run("Polling the queue #{queue}", fn ->
+      case Jobs.acquire_next_performable_job(repo, scope, queue) do
+        {:ok, job} ->
+          task = Task.Supervisor.async_nolink(task_supervisor_name, Jobs, :perform, [job])
 
-        Process.send_after(self(), {:kill, task}, job.timeout)
-        {task.ref, job}
+          Process.send_after(self(), {:kill, task}, job.timeout)
+          {task.ref, job}
 
-      {:error, _} ->
-        nil
-    end
-  rescue
-    exception ->
-      Logger.error(
-        "Polling the queue #{queue} failed: " <>
-          Exception.format(:error, exception, __STACKTRACE__)
-      )
-
-      nil
+        {:error, _} ->
+          nil
+      end
+    end)
   end
 end
