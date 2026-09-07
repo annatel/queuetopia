@@ -19,13 +19,17 @@ defmodule Queuetopia.Locks do
       queue: queue,
       locked_at: utc_now,
       locked_by_node: Kernel.inspect(Node.self()),
-      locked_until: DateTime.add(utc_now, lock_retention, :millisecond)
+      locked_until: utc_now |> DateTime.add(lock_retention, :millisecond) |> ceil_to_second()
     })
     |> repo.insert()
     |> case do
       {:ok, %Lock{} = lock} -> {:ok, lock}
       {:error, _changeset} -> {:error, :locked}
     end
+  end
+
+  defp ceil_to_second(datetime) do
+    datetime |> DateTime.add(999, :millisecond) |> DateTime.truncate(:second)
   end
 
   @doc false

@@ -348,7 +348,7 @@ defmodule Queuetopia.SchedulerTest do
         scope: scope
       )
 
-    Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 500)
+    Application.put_env(:queuetopia, TestQueuetopia, poll_interval: 100)
     start_supervised!(TestQueuetopia)
 
     assert_receive {^queue, _, :started}, 500
@@ -508,7 +508,7 @@ defmodule Queuetopia.SchedulerTest do
 
       assert_receive {^queue, ^slow_job_id, :started}, 500
       assert_receive {^queue, ^slow_job_id, :timeout}, 500
-      assert_receive {^queue, ^slow_job_id, :started}, 1_500
+      assert_receive {^queue, ^slow_job_id, :started}, 3_000
       assert_receive {^queue, ^slow_job_id, :timeout}, 500
 
       :sys.get_state(TestQueuetopia.Scheduler)

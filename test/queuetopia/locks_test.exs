@@ -4,6 +4,16 @@ defmodule Queuetopia.LocksTest do
   alias Queuetopia.Locks
   alias Queuetopia.Locks.Lock
 
+  test "lock_queue/4 holds the lock a whole extra second past the job timeout" do
+    before = DateTime.utc_now()
+
+    {:ok, %Lock{locked_until: locked_until}} = Locks.lock_queue(TestRepo, "scope", "queue", 0)
+
+    margin = DateTime.diff(locked_until, before, :millisecond)
+    assert margin >= 1_000 and margin < 2_000
+    assert locked_until.microsecond == {0, 0}
+  end
+
   test "release_expired_locks/2" do
     %Lock{id: id, scope: scope} = insert!(:lock)
     %Lock{} = insert!(:expired_lock, scope: scope)

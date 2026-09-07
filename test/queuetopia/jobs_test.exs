@@ -165,8 +165,7 @@ defmodule Queuetopia.JobsTest do
       assert %Lock{locked_until: locked_until, locked_at: locked_at} =
                TestRepo.get_by(Lock, scope: scope, queue: queue)
 
-      assert locked_until ==
-               locked_at |> DateTime.add(6_000, :millisecond) |> DateTime.truncate(:second)
+      assert DateTime.diff(locked_until, locked_at, :millisecond) in 6_000..7_000
     end
 
     test "under concurrent acquires, exactly one gets the job" do
