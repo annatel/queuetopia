@@ -1,4 +1,4 @@
-defmodule Queuetopia.Queue.Lock do
+defmodule Queuetopia.Locks.Lock do
   @moduledoc false
 
   use Ecto.Schema

@@ -3,8 +3,10 @@ defmodule Queuetopia.Scheduler do
 
   use GenServer
 
-  alias Queuetopia.Queue
-  alias Queuetopia.Queue.Job
+  alias Queuetopia.BestEffort
+  alias Queuetopia.Jobs
+  alias Queuetopia.Locks
+  alias Queuetopia.PendingQueues
 
   @type option :: {:poll_interval, pos_integer()}
 
@@ -79,7 +81,7 @@ defmodule Queuetopia.Scheduler do
     job = Map.get(jobs, ref)
     :ok = handle_task_result(repo, job, {:error, inspect(reason)})
 
-    Queue.unlock_queue(repo, scope, job.queue)
+    unlock_queue(repo, scope, job.queue)
     {:noreply, %{state | jobs: Map.delete(jobs, ref)}}
   end
 
@@ -98,7 +100,7 @@ defmodule Queuetopia.Scheduler do
     job = Map.get(jobs, ref)
     :ok = handle_task_result(repo, job, task_result)
 
-    Queue.unlock_queue(repo, scope, job.queue)
+    unlock_queue(repo, scope, job.queue)
 
     send_poll(self())
 
@@ -116,7 +118,7 @@ defmodule Queuetopia.Scheduler do
   defp safe_persist_result(repo, job, result) do
     with {:error, error} <-
            (try do
-              Queue.persist_result!(repo, job, result)
+              Jobs.persist_result!(repo, job, result)
             rescue
               exception ->
                 {:error, Exception.message(exception)}
@@ -127,12 +129,20 @@ defmodule Queuetopia.Scheduler do
               :exit, reason ->
                 {:error, "#{inspect(reason)}"}
             end) do
-      job
-      |> Ecto.Changeset.change(
-        error: "Handle_failed_job error:" <> error <> " Job error:" <> inspect(result)
-      )
-      |> repo.update!()
+      BestEffort.run("Recording the error of the job #{job.id}", fn ->
+        job
+        |> Ecto.Changeset.change(
+          error: "Handle_failed_job error:" <> error <> " Job error:" <> inspect(result)
+        )
+        |> repo.update!()
+      end)
     end
+  end
+
+  defp unlock_queue(repo, scope, queue) do
+    BestEffort.run("Unlocking the queue #{queue}", fn ->
+      Locks.unlock_queue(repo, scope, queue)
+    end)
   end
 
   defp poll_queues(task_supervisor_name, poll_interval, repo, scope, jobs, opts) do
@@ -140,37 +150,44 @@ defmodule Queuetopia.Scheduler do
     number_of_concurrent_jobs = Keyword.fetch!(opts, :number_of_concurrent_jobs)
     number_of_running_jobs = Enum.count(jobs)
 
-    Queue.release_expired_locks(repo, scope)
+    BestEffort.run("Releasing the expired locks", fn ->
+      Locks.release_expired_locks(repo, scope)
+    end)
+
     limit = number_of_concurrent_jobs && number_of_concurrent_jobs - number_of_running_jobs
 
-    jobs =
-      Queue.list_available_pending_queues(repo, scope, limit: limit)
-      |> Enum.map(&perform_next_pending_job(&1, task_supervisor_name, repo, scope))
-      |> Enum.reject(&is_nil(&1))
-      |> Enum.into(%{})
-      |> Map.merge(jobs)
+    started_jobs =
+      BestEffort.run("Listing the available pending queues", fn ->
+        PendingQueues.list_available_pending_queues(repo, scope, limit: limit)
+        |> Enum.map(&run_next_performable_job(&1, task_supervisor_name, repo, scope))
+        |> Enum.reject(&is_nil(&1))
+        |> Enum.into(%{})
+      end) || %{}
 
     unless one_time? do
       Process.send_after(self(), {:poll, one_time?: false}, poll_interval)
     end
 
-    jobs
+    Map.merge(jobs, started_jobs)
   end
 
-  defp perform_next_pending_job(
+  defp run_next_performable_job(
          queue,
          task_supervisor_name,
          repo,
          scope
        ) do
-    with %Job{} = job <- Queue.get_next_pending_job(repo, scope, queue),
-         {:ok, job} <- Queue.fetch_job(repo, job) do
-      task = Task.Supervisor.async_nolink(task_supervisor_name, Queue, :perform, [job])
+    BestEffort.run("Polling the queue #{queue}", fn ->
+      case Jobs.acquire_next_performable_job(repo, scope, queue) do
+        {:ok, job} ->
+          task = Task.Supervisor.async_nolink(task_supervisor_name, Jobs, :perform, [job])
 
-      Process.send_after(self(), {:kill, task}, job.timeout)
-      {task.ref, job}
-    else
-      _ -> nil
-    end
+          Process.send_after(self(), {:kill, task}, job.timeout)
+          {task.ref, job}
+
+        {:error, _} ->
+          nil
+      end
+    end)
   end
 end

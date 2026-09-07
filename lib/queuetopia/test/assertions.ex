@@ -3,8 +3,8 @@ defmodule Queuetopia.Test.Assertions do
 
   require Ecto.Query
 
-  alias Queuetopia.Queue
-  alias Queuetopia.Queue.Job
+  alias Queuetopia.Jobs
+  alias Queuetopia.Jobs.Job
 
   @doc """
   Find jobs that have just been created
@@ -21,7 +21,7 @@ defmodule Queuetopia.Test.Assertions do
 
     job_params = Map.get(job_attrs, :params, %{})
 
-    Queue.list_jobs(queuetopia.repo(),
+    Jobs.list_jobs(queuetopia.repo(),
       filters: job_attrs |> Map.take(filterable_fields()) |> Enum.to_list()
     )
     |> Enum.filter(fn job -> subset?(job_params, job.params) end)

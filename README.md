@@ -8,21 +8,23 @@ A persistant blocking job queue built with Ecto.
 
 - Persistence — Jobs are stored in a DB and updated after each execution attempt.
 
-- Blocking — A failing job blocks its queue until it is done.
+- Blocking — A failing job blocks the jobs scheduled after it until it is done;
+  a job scheduled earlier than the failing one takes its turn first.
 
 - Dynamicity — Queues are dynamically defined. Once the first job is created
   for the queue, the queue exists.
 
-- Reactivity — Immediatly try to execute a job that has just been created.
+- Reactivity — Job creation is silent; wake the scheduler explicitly with
+  `notify_scheduler/0` after your transaction commits, or let the next poll
+  pick the job up.
 
 - Scheduled Jobs — Allow to schedule job in the future.
 
 - Retries — Failed jobs are retried with a configurable backoff.
 
-- Persistence — Jobs are stored in a DB and updated after each execution attempt.
-
-- Performance — At each poll, only one job per queue is run. Optionnaly, jobs can
-  avoid waiting unnecessarily. The performed job triggers an other polling.
+- Performance — The poll reads a small pending-queues table instead of scanning
+  the jobs backlog. At each poll, only one job per queue is run; the performed
+  job triggers an other polling.
 
 - Isolated Queues — Jobs are stored in a single table but are executed in
   distinct queues. Each queue runs in isolation, ensuring that a job in a single
@@ -40,7 +42,7 @@ The package can be installed by adding `queuetopia` to your list of dependencies
 ```elixir
 def deps do
   [
-    {:queuetopia, "~> 2.4"}
+    {:queuetopia, "~> 6.0"}
   ]
 end
 ```
@@ -128,7 +130,7 @@ defmodule MyApp.MailQueuetopia.Performer do
   @behaviour Queuetopia.Performer
 
   @impl true
-  def perform(%Queuetopia.Queue.Job{action: "do_x"}) do
+  def perform(%Queuetopia.Jobs.Job{action: "do_x"}) do
     do_x()
   end
 
@@ -212,10 +214,10 @@ so the won't interfer each other.
 
 ## Test
 
-Rename env/test.env.example to env/test.env, set your params and source it.
+Point `QUEUETOPIA__DATABASE_TEST_URL` at a MySQL database, then:
 
 ```sh
-MIX_ENV=test mix do ecto.drop, ecto.create, ecto.migrate
+MIX_ENV=test mix ecto.reset
 mix test
 ```
 

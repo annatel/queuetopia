@@ -2,7 +2,7 @@ defmodule Queuetopia.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/annatel/queuetopia"
-  @version "5.0.0"
+  @version "6.0.0"
 
   def project do
     [
@@ -14,6 +14,15 @@ defmodule Queuetopia.MixProject do
       description: description(),
       deps: deps(),
       elixirc_paths: elixirc_paths(Mix.env()),
+      test_coverage: [
+        ignore_modules: [
+          ~r/^Queuetopia\.Migrations/,
+          ~r/^Queuetopia\.Test[A-Z]/,
+          Queuetopia.Factory,
+          Queuetopia.DataCase
+        ],
+        summary: [threshold: 95]
+      ],
       aliases: aliases(),
       docs: docs()
     ]
@@ -33,7 +42,6 @@ defmodule Queuetopia.MixProject do
     [
       {:ecto_sql, "~> 3.11"},
       {:myxql, ">= 0.0.0", only: :test},
-      {:postgrex, ">= 0.0.0", only: :test},
       {:antl_utils_ecto, "~> 2.12"},
       {:ex_doc, "~> 0.32", only: :dev, runtime: false}
     ]

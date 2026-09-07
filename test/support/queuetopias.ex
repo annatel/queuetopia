@@ -28,7 +28,7 @@ end
 defmodule Queuetopia.TestQueuetopia_Convention.Performer do
   use Queuetopia.Performer
   import Queuetopia.Factory
-  alias Queuetopia.Queue.Job
+  alias Queuetopia.Jobs.Job
 
   @impl true
   def perform(%Job{queue: queue, id: job_id, params: %{"bin_pid" => bin_pid}}) do

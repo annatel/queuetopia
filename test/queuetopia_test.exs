@@ -2,7 +2,7 @@ defmodule QueuetopiaTest do
   use Queuetopia.DataCase
   alias Queuetopia.{TestQueuetopia, TestQueuetopia_2, TestQueuetopia_RedefTest}
   alias Queuetopia.TestQueuetopia_Convention
-  alias Queuetopia.Queue.Job
+  alias Queuetopia.Jobs.Job
 
   setup do
     Application.put_env(:queuetopia, TestQueuetopia, disable?: false)

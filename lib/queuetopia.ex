@@ -19,7 +19,7 @@ defmodule Queuetopia do
         @behaviour Queuetopia.Performer
 
         @impl true
-        def perform(%Queuetopia.Queue.Job{action: "do_x"}) do
+        def perform(%Queuetopia.Jobs.Job{action: "do_x"}) do
           do_x()
         end
 
@@ -48,7 +48,7 @@ defmodule Queuetopia do
       @behaviour Queuetopia
 
       use Supervisor
-      alias Queuetopia.Queue.Job
+      alias Queuetopia.Jobs.Job
 
       @type option :: {:poll_interval, non_neg_integer()}
 
@@ -226,7 +226,7 @@ defmodule Queuetopia do
           }
           |> Map.merge(Enum.into(opts, %{}))
 
-        Queuetopia.Queue.create_job(attrs, @repo)
+        Queuetopia.Jobs.create_job(attrs, @repo)
       end
 
       @doc """
@@ -260,12 +260,12 @@ defmodule Queuetopia do
         end
       end
 
-      @spec list_jobs(Queue.list_options()) :: [Job.t()]
+      @spec list_jobs(Queuetopia.Jobs.list_options()) :: [Job.t()]
       def list_jobs(opts \\ []) do
-        Queuetopia.Queue.list_jobs(@repo, opts)
+        Queuetopia.Jobs.list_jobs(@repo, opts)
       end
 
-      @spec paginate_jobs(pos_integer, pos_integer, Queue.list_options()) :: %{
+      @spec paginate_jobs(pos_integer, pos_integer, Queuetopia.Jobs.list_options()) :: %{
               data: [Job.t()],
               total: any,
               page_size: pos_integer,
@@ -273,7 +273,7 @@ defmodule Queuetopia do
             }
       def paginate_jobs(page_size, page_number, opts \\ [])
           when is_integer(page_number) and is_integer(page_size) and is_list(opts) do
-        Queuetopia.Queue.paginate_jobs(@repo, page_size, page_number, opts)
+        Queuetopia.Jobs.paginate_jobs(@repo, page_size, page_number, opts)
       end
 
       @doc """

@@ -1,0 +1,805 @@
+defmodule Queuetopia.JobsTest.DoneMidAcquireRepo do
+  alias Queuetopia.TestRepo
+
+  def start_hook(fun), do: Agent.start_link(fn -> fun end, name: __MODULE__)
+
+  def insert(changeset, opts \\ []) do
+    case Agent.get_and_update(__MODULE__, &{&1, nil}) do
+      nil -> :ok
+      hook -> hook.()
+    end
+
+    TestRepo.insert(changeset, opts)
+  end
+
+  def transaction(fun, opts \\ []), do: TestRepo.transaction(fun, opts)
+  def rollback(value), do: TestRepo.rollback(value)
+  def all(queryable, opts \\ []), do: TestRepo.all(queryable, opts)
+  def one(queryable, opts \\ []), do: TestRepo.one(queryable, opts)
+  def __adapter__(), do: TestRepo.__adapter__()
+end
+
+defmodule Queuetopia.JobsTest do
+  use Queuetopia.DataCase
+
+  alias Queuetopia.Jobs
+  alias Queuetopia.Jobs.Job
+  alias Queuetopia.Locks.Lock
+
+  describe "acquire_next_performable_job/3" do
+    test "does not run a job completed between its read and its lock" do
+      scope = "scope_#{System.unique_integer([:positive])}"
+      queue = "queue_#{System.unique_integer([:positive])}"
+      test_pid = self()
+
+      spawn_link(fn ->
+        Ecto.Adapters.SQL.Sandbox.unboxed_run(TestRepo, fn ->
+          try do
+            job = insert_pending_job!(:success_job, scope: scope, queue: queue)
+
+            {:ok, _} =
+              Queuetopia.JobsTest.DoneMidAcquireRepo.start_hook(fn ->
+                Task.async(fn ->
+                  Ecto.Adapters.SQL.Sandbox.unboxed_run(TestRepo, fn ->
+                    utc_now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+                    TestRepo.update_all(Ecto.Query.where(Job, id: ^job.id),
+                      set: [done_at: utc_now]
+                    )
+                  end)
+                end)
+                |> Task.await()
+              end)
+
+            result =
+              Jobs.acquire_next_performable_job(
+                Queuetopia.JobsTest.DoneMidAcquireRepo,
+                scope,
+                queue
+              )
+
+            lock = TestRepo.get_by(Lock, scope: scope, queue: queue)
+            send(test_pid, {:result, result, lock})
+          after
+            TestRepo.delete_all(Ecto.Query.where(Job, scope: ^scope))
+
+            TestRepo.delete_all(
+              Ecto.Query.where(Queuetopia.PendingQueues.PendingQueue, scope: ^scope)
+            )
+
+            TestRepo.delete_all(Ecto.Query.where(Lock, scope: ^scope))
+            TestRepo.query!("UPDATE queuetopia_sequences SET sequence = sequence - 1")
+            send(test_pid, :cleaned)
+          end
+        end)
+      end)
+
+      assert_receive {:result, {:error, :no_performable_job}, nil}, 5_000
+      assert_receive :cleaned, 1_000
+    end
+
+    test "skips a job whose row is being written, without waiting" do
+      scope = "scope_#{System.unique_integer([:positive])}"
+      queue = "queue_#{System.unique_integer([:positive])}"
+      test_pid = self()
+
+      holder =
+        spawn_link(fn ->
+          test_ref = Process.monitor(test_pid)
+
+          Ecto.Adapters.SQL.Sandbox.unboxed_run(TestRepo, fn ->
+            try do
+              job = insert_pending_job!(:success_job, scope: scope, queue: queue)
+
+              TestRepo.transaction(fn ->
+                TestRepo.update_all(Ecto.Query.where(Job, id: ^job.id), set: [attempts: 1])
+                send(test_pid, :held)
+
+                receive do
+                  :release -> :ok
+                  {:DOWN, ^test_ref, :process, _, _} -> :ok
+                after
+                  10_000 -> :ok
+                end
+              end)
+            after
+              TestRepo.delete_all(Ecto.Query.where(Job, scope: ^scope))
+
+              TestRepo.delete_all(
+                Ecto.Query.where(Queuetopia.PendingQueues.PendingQueue, scope: ^scope)
+              )
+
+              TestRepo.delete_all(Ecto.Query.where(Lock, scope: ^scope))
+              TestRepo.query!("UPDATE queuetopia_sequences SET sequence = sequence - 1")
+              send(test_pid, :cleaned)
+            end
+          end)
+        end)
+
+      assert_receive :held, 1_000
+
+      spawn_link(fn ->
+        Ecto.Adapters.SQL.Sandbox.unboxed_run(TestRepo, fn ->
+          {elapsed_us, result} =
+            :timer.tc(fn -> Jobs.acquire_next_performable_job(TestRepo, scope, queue) end)
+
+          lock = TestRepo.get_by(Lock, scope: scope, queue: queue)
+          send(test_pid, {:acquired, elapsed_us, result, lock})
+        end)
+      end)
+
+      assert_receive {:acquired, elapsed_us, {:error, :no_performable_job}, nil}, 5_000
+      assert elapsed_us < 1_000_000
+
+      send(holder, :release)
+      assert_receive :cleaned, 1_000
+    end
+
+    test "returns locked when the pending row is held by a producer" do
+      scope = "scope_#{System.unique_integer([:positive])}"
+      queue = "queue_#{System.unique_integer([:positive])}"
+      test_pid = self()
+
+      holder = Queuetopia.HeldPendingQueue.hold(scope, queue, test_pid)
+
+      assert_receive :locked, 1_000
+
+      spawn_link(fn ->
+        Ecto.Adapters.SQL.Sandbox.unboxed_run(TestRepo, fn ->
+          send(test_pid, {:acquired, Jobs.acquire_next_performable_job(TestRepo, scope, queue)})
+        end)
+      end)
+
+      assert_receive {:acquired, {:error, :locked}}, 5_000
+
+      send(holder, :release)
+      assert_receive :cleaned, 1_000
+    end
+
+    test "acquires the next performable job and locks the queue" do
+      %{id: id, queue: queue, scope: scope} = insert_pending_job!(:job, scheduled_at: utc_now())
+      insert_pending_job!(:job, queue: queue, scope: scope, scheduled_at: utc_now() |> add(60))
+
+      assert {:ok, %Job{id: ^id}} = Jobs.acquire_next_performable_job(TestRepo, scope, queue)
+
+      assert %Lock{locked_until: locked_until, locked_at: locked_at} =
+               TestRepo.get_by(Lock, scope: scope, queue: queue)
+
+      assert DateTime.diff(locked_until, locked_at, :millisecond) in 6_000..7_000
+    end
+
+    test "under concurrent acquires, exactly one gets the job" do
+      scope = "scope_#{System.unique_integer([:positive])}"
+      queue = "queue_#{System.unique_integer([:positive])}"
+      test_pid = self()
+      contenders = 5
+
+      holder =
+        spawn_link(fn ->
+          test_ref = Process.monitor(test_pid)
+
+          Ecto.Adapters.SQL.Sandbox.unboxed_run(TestRepo, fn ->
+            try do
+              insert_pending_job!(:job, scope: scope, queue: queue)
+              send(test_pid, :seeded)
+
+              receive do
+                :release -> :ok
+                {:DOWN, ^test_ref, :process, _, _} -> :ok
+              after
+                10_000 -> :ok
+              end
+            after
+              TestRepo.delete_all(Ecto.Query.where(Job, scope: ^scope))
+              TestRepo.delete_all(Ecto.Query.where(Lock, scope: ^scope))
+
+              TestRepo.delete_all(
+                Ecto.Query.where(Queuetopia.PendingQueues.PendingQueue, scope: ^scope)
+              )
+
+              TestRepo.query!("UPDATE queuetopia_sequences SET sequence = sequence - 1")
+              send(test_pid, :cleaned)
+            end
+          end)
+        end)
+
+      assert_receive :seeded, 1_000
+
+      for _ <- 1..contenders do
+        spawn_link(fn ->
+          Ecto.Adapters.SQL.Sandbox.unboxed_run(TestRepo, fn ->
+            send(test_pid, {:ready, self()})
+
+            receive do
+              :go -> :ok
+            end
+
+            send(test_pid, {:acquired, Jobs.acquire_next_performable_job(TestRepo, scope, queue)})
+          end)
+        end)
+      end
+
+      contender_pids =
+        for _ <- 1..contenders do
+          assert_receive {:ready, pid}, 1_000
+          pid
+        end
+
+      Enum.each(contender_pids, &send(&1, :go))
+
+      results =
+        for _ <- 1..contenders do
+          assert_receive {:acquired, result}, 5_000
+          result
+        end
+
+      assert Enum.count(results, &match?({:ok, %Job{}}, &1)) == 1
+
+      assert Enum.reject(results, &match?({:ok, _}, &1)) |> Enum.uniq() == [{:error, :locked}]
+
+      assert [%Lock{}] = TestRepo.all(Ecto.Query.where(Lock, scope: ^scope))
+
+      send(holder, :release)
+      assert_receive :cleaned, 1_000
+    end
+
+    test "a poll miss refreshes the pending row in the same transaction" do
+      utc_now = utc_now() |> DateTime.truncate(:second)
+      later = utc_now |> DateTime.add(3600)
+
+      %{queue: queue, scope: scope} = insert!(:job, scheduled_at: later)
+
+      insert!(:pending_queue,
+        scope: scope,
+        queue: queue,
+        next_performable_at: DateTime.add(utc_now, -60)
+      )
+
+      assert {:error, :no_performable_job} =
+               Jobs.acquire_next_performable_job(TestRepo, scope, queue)
+
+      assert %Queuetopia.PendingQueues.PendingQueue{next_performable_at: refreshed} =
+               TestRepo.get_by(Queuetopia.PendingQueues.PendingQueue, scope: scope, queue: queue)
+
+      assert DateTime.compare(refreshed, later) == :eq
+    end
+
+    test "a poll miss on an emptied queue deletes the pending row in the same transaction" do
+      %{scope: scope, queue: queue} = insert!(:pending_queue)
+
+      assert {:error, :no_performable_job} =
+               Jobs.acquire_next_performable_job(TestRepo, scope, queue)
+
+      assert is_nil(
+               TestRepo.get_by(Queuetopia.PendingQueues.PendingQueue, scope: scope, queue: queue)
+             )
+    end
+
+    test "when the queue has an expired lock, still returns an error" do
+      %{queue: queue, scope: scope} = insert_pending_job!(:job, scheduled_at: utc_now())
+      insert!(:expired_lock, scope: scope, queue: queue)
+
+      assert {:error, :locked} = Jobs.acquire_next_performable_job(TestRepo, scope, queue)
+    end
+
+    test "when the queue is already locked, returns an error and acquires nothing" do
+      %{queue: queue, scope: scope} = insert_pending_job!(:job, scheduled_at: utc_now())
+      insert!(:lock, scope: scope, queue: queue)
+
+      assert {:error, :locked} = Jobs.acquire_next_performable_job(TestRepo, scope, queue)
+    end
+
+    test "when the head job is not performable yet, returns an error without locking the queue" do
+      %{queue: queue, scope: scope} =
+        insert_pending_job!(:job, scheduled_at: utc_now() |> add(3600))
+
+      assert {:error, :no_performable_job} =
+               Jobs.acquire_next_performable_job(TestRepo, scope, queue)
+
+      assert is_nil(TestRepo.get_by(Lock, scope: scope, queue: queue))
+    end
+
+    test "when the queue has no pending job, returns an error without locking the queue" do
+      %{queue: queue, scope: scope} = insert_pending_job!(:done_job)
+
+      assert {:error, :no_performable_job} =
+               Jobs.acquire_next_performable_job(TestRepo, scope, queue)
+
+      assert is_nil(TestRepo.get_by(Lock, scope: scope, queue: queue))
+    end
+  end
+
+  describe "acquire_next_performable_job/3 — next job selection" do
+    test "returns the next pending job for a given scoped queue" do
+      %{queue: queue_1, scope: scope_1} = insert_pending_job!(:done_job)
+      %{id: id_1} = insert_pending_job!(:job, queue: queue_1, scope: scope_1)
+
+      %{id: id_2, queue: queue_2} = insert_pending_job!(:job, scope: scope_1)
+
+      %{id: id_3, queue: queue_3, scope: scope_2} = insert_pending_job!(:job)
+
+      assert {:ok, %Job{id: ^id_1}} =
+               Jobs.acquire_next_performable_job(TestRepo, scope_1, queue_1)
+
+      assert {:ok, %Job{id: ^id_2}} =
+               Jobs.acquire_next_performable_job(TestRepo, scope_1, queue_2)
+
+      assert {:ok, %Job{id: ^id_3}} =
+               Jobs.acquire_next_performable_job(TestRepo, scope_2, queue_3)
+    end
+
+    test "gives precedence to the earliest scheduled_at" do
+      utc_now = utc_now()
+
+      %{scope: scope, queue: queue} =
+        insert_pending_job!(:job, scheduled_at: utc_now |> DateTime.add(15, :second))
+
+      %{id: id} =
+        insert_pending_job!(:job,
+          scope: scope,
+          queue: queue,
+          scheduled_at: utc_now
+        )
+
+      assert {:ok, %Job{id: ^id}} = Jobs.acquire_next_performable_job(TestRepo, scope, queue)
+    end
+
+    test "for the same scheduled_at, gives precedence to the lowest sequence" do
+      utc_now = utc_now()
+
+      %{id: id_1, scope: scope, queue: queue} =
+        insert_pending_job!(:job, scheduled_at: utc_now, sequence: 1)
+
+      insert_pending_job!(:job, scope: scope, queue: queue, scheduled_at: utc_now, sequence: 2)
+
+      assert {:ok, %Job{id: ^id_1}} = Jobs.acquire_next_performable_job(TestRepo, scope, queue)
+    end
+
+    test "finds no performable job in an empty queue" do
+      %{queue: queue, scope: scope} = insert_pending_job!(:done_job)
+
+      assert {:error, :no_performable_job} =
+               Jobs.acquire_next_performable_job(TestRepo, scope, queue)
+    end
+
+    test "finds no performable job in an unknown queue" do
+      %{queue: queue, scope: scope} = params_for(:job)
+
+      assert {:error, :no_performable_job} =
+               Jobs.acquire_next_performable_job(TestRepo, scope, queue)
+    end
+
+    test "finds no performable job before the scheduled date" do
+      %Job{queue: queue, scope: scope} =
+        insert_pending_job!(:job, scheduled_at: utc_now() |> add(3600, :second))
+
+      assert {:error, :no_performable_job} =
+               Jobs.acquire_next_performable_job(TestRepo, scope, queue)
+    end
+
+    test "a due next attempt makes the job performable" do
+      %Job{queue: queue, scope: scope, id: id} =
+        insert_pending_job!(:job, next_attempt_at: utc_now())
+
+      assert {:ok, %Job{id: ^id}} = Jobs.acquire_next_performable_job(TestRepo, scope, queue)
+    end
+
+    test "a backed-off job is not performable before its next attempt" do
+      %Job{queue: queue, scope: scope} =
+        insert_pending_job!(:job, next_attempt_at: utc_now() |> add(3600, :second))
+
+      assert {:error, :no_performable_job} =
+               Jobs.acquire_next_performable_job(TestRepo, scope, queue)
+    end
+
+    test "exhausted attempts leave no performable job" do
+      %Job{queue: queue, scope: scope} =
+        insert_pending_job!(:job, next_attempt_at: utc_now(), attempts: 20, max_attempts: 20)
+
+      assert {:error, :no_performable_job} =
+               Jobs.acquire_next_performable_job(TestRepo, scope, queue)
+    end
+  end
+
+  test "perform/1" do
+    job = insert!(:success_job, scope: Queuetopia.TestQueuetopia.scope())
+    assert Jobs.perform(job) == :ok
+  end
+
+  describe "persist_result!/4" do
+    test "commits the result and survives when the pending row is held by another transaction" do
+      scope = "scope_#{System.unique_integer([:positive])}"
+      queue = "queue_#{System.unique_integer([:positive])}"
+      test_pid = self()
+
+      holder =
+        spawn_link(fn ->
+          test_ref = Process.monitor(test_pid)
+
+          Ecto.Adapters.SQL.Sandbox.unboxed_run(TestRepo, fn ->
+            try do
+              job = insert_pending_job!(:success_job, scope: scope, queue: queue)
+              send(test_pid, {:seeded, job})
+
+              TestRepo.transaction(fn ->
+                Queuetopia.PendingQueues.lock_pending_queue(TestRepo, scope, queue)
+                send(test_pid, :locked)
+
+                receive do
+                  :release -> :ok
+                  {:DOWN, ^test_ref, :process, _, _} -> :ok
+                after
+                  10_000 -> :ok
+                end
+              end)
+            after
+              TestRepo.delete_all(Ecto.Query.where(Job, scope: ^scope))
+
+              TestRepo.delete_all(
+                Ecto.Query.where(Queuetopia.PendingQueues.PendingQueue, scope: ^scope)
+              )
+
+              TestRepo.query!("UPDATE queuetopia_sequences SET sequence = sequence - 1")
+              send(test_pid, :cleaned)
+            end
+          end)
+        end)
+
+      assert_receive {:seeded, job}, 1_000
+      assert_receive :locked, 1_000
+
+      spawn_link(fn ->
+        Ecto.Adapters.SQL.Sandbox.unboxed_run(TestRepo, fn ->
+          log =
+            ExUnit.CaptureLog.capture_log(fn ->
+              %Job{} = Jobs.persist_result!(TestRepo, job, :ok)
+            end)
+
+          send(test_pid, {:persisted, TestRepo.get(Job, job.id), log})
+        end)
+      end)
+
+      assert_receive {:persisted, %Job{} = done_job, log}, 5_000
+      refute is_nil(done_job.done_at)
+      assert is_nil(done_job.error)
+      refute log =~ "Refreshing the pending queue"
+
+      send(holder, :release)
+      assert_receive :cleaned, 1_000
+    end
+
+    test "when a job succeeded, persists the job as succeeded" do
+      job = insert!(:success_job)
+
+      _ = Jobs.persist_result!(TestRepo, job, :ok)
+
+      %Job{
+        done_at: done_at,
+        attempted_at: attempted_at,
+        attempted_by: attempted_by,
+        attempts: attempts
+      } = TestRepo.reload(job)
+
+      refute is_nil(done_at)
+      refute is_nil(attempted_at)
+      assert attempted_by == Atom.to_string(Node.self())
+      assert attempts == 1
+      assert done_at == attempted_at
+    end
+
+    test "when a job succeeded with a result, persists the job as succeeded" do
+      job = insert!(:success_job)
+
+      _ = Jobs.persist_result!(TestRepo, job, {:ok, :done})
+
+      %Job{
+        done_at: done_at,
+        attempted_at: attempted_at,
+        attempted_by: attempted_by,
+        attempts: attempts
+      } = TestRepo.reload(job)
+
+      refute is_nil(done_at)
+      refute is_nil(attempted_at)
+      assert attempted_by == Atom.to_string(Node.self())
+      assert attempts == 1
+      assert done_at == attempted_at
+    end
+
+    test "when a job failed, persists the job as failed and record the error" do
+      job = insert!(:failure_job, scope: Queuetopia.TestQueuetopia.scope())
+
+      _ = Jobs.persist_result!(TestRepo, job, {:error, "error"})
+
+      %Job{} = job = TestRepo.reload(job)
+      assert job.done_at == nil
+      refute job.attempted_at == nil
+      assert job.attempted_by == Atom.to_string(Node.self())
+      assert job.attempts == 1
+      assert job.error == "error"
+    end
+
+    test "when a job returns an unexpected_response, persists the job as failed and record the response" do
+      job = insert!(:failure_job, scope: Queuetopia.TestQueuetopia.scope())
+
+      _ = Jobs.persist_result!(TestRepo, job, "unexpected_response")
+
+      %Job{} = job = TestRepo.reload(job)
+      assert job.done_at == nil
+      refute job.attempted_at == nil
+      assert job.attempted_by == Atom.to_string(Node.self())
+      assert job.attempts == 1
+      assert job.error == "\"unexpected_response\""
+    end
+
+    test "when handle_failed_job/1 is defined by the performer" do
+      %{id: id} =
+        job =
+        insert!(:failure_job,
+          scope: Queuetopia.TestQueuetopiaWithHandleFailedJob |> to_string()
+        )
+
+      _ = Jobs.persist_result!(TestRepo, job, {:error, "error"})
+
+      %Job{} = job = TestRepo.reload(job)
+      assert job.done_at == nil
+      refute job.attempted_at == nil
+      assert job.attempted_by == Atom.to_string(Node.self())
+      assert job.attempts == 1
+
+      assert_receive {:job, %Job{id: ^id, done_at: nil, attempted_at: %DateTime{}, attempts: 1}},
+                     100
+    end
+
+    test "by default, backoff is exponential for retry" do
+      job =
+        insert!(:failure_job,
+          scope: Queuetopia.TestQueuetopia.scope(),
+          max_backoff: 10 * 60 * 1_000
+        )
+
+      [2_000, 3_000, 5_000, 9_000, 17_000]
+      |> Enum.each(fn backoff ->
+        job = TestRepo.reload(job)
+
+        Jobs.persist_result!(TestRepo, job, {:error, "error"})
+
+        %Job{
+          done_at: nil,
+          attempted_at: attempted_at,
+          next_attempt_at: next_attempt_at
+        } = TestRepo.reload(job)
+
+        assert :eq =
+                 DateTime.compare(
+                   next_attempt_at,
+                   DateTime.add(attempted_at, backoff, :millisecond)
+                 )
+      end)
+    end
+
+    test "applies the backoff defined by the performer" do
+      %{attempted_at: attempted_at} =
+        job =
+        insert!(:failure_job,
+          scope: Queuetopia.TestQueuetopiaWithBackoff |> to_string(),
+          attempted_at: utc_now() |> DateTime.truncate(:second)
+        )
+
+      Jobs.persist_result!(TestRepo, job, {:error, "error"})
+
+      %{next_attempt_at: next_attempt_at} = job = TestRepo.reload(job)
+
+      backoff = Queuetopia.TestQueuetopiaWithBackoff.Performer.backoff(job)
+      assert backoff == 20 * 1_000
+
+      assert_in_delta next_attempt_at |> DateTime.to_unix(),
+                      DateTime.add(
+                        attempted_at,
+                        backoff,
+                        :millisecond
+                      )
+                      |> DateTime.to_unix(),
+                      1
+    end
+
+    test "for default backoff, limit to maximum backoff" do
+      max_backoff = 2_000
+
+      job =
+        insert!(:failure_job, scope: Queuetopia.TestQueuetopia.scope(), max_backoff: max_backoff)
+
+      _ = Jobs.persist_result!(TestRepo, job, {:error, "error"})
+
+      %Job{
+        done_at: nil,
+        attempted_at: attempted_at,
+        next_attempt_at: next_attempt_at
+      } = TestRepo.reload(job)
+
+      assert :eq =
+               DateTime.compare(
+                 next_attempt_at,
+                 DateTime.add(attempted_at, max_backoff, :millisecond)
+               )
+
+      _ = Jobs.persist_result!(TestRepo, job, {:error, "error"})
+
+      %Job{
+        done_at: nil,
+        attempted_at: attempted_at,
+        next_attempt_at: next_attempt_at
+      } = TestRepo.reload(job)
+
+      assert :eq =
+               DateTime.compare(
+                 next_attempt_at,
+                 DateTime.add(attempted_at, max_backoff, :millisecond)
+               )
+    end
+  end
+
+  describe "paginate_jobs/2" do
+    test "returns a list of the jobs" do
+      %{id: id} = insert!(:job)
+
+      assert %{data: [%Job{id: ^id}], page_size: 100, page_number: 1, total: 1} =
+               Jobs.paginate_jobs(TestRepo, 100, 1)
+    end
+
+    test "order_by" do
+      %{id: id1} = insert!(:job, sequence: 1)
+      %{id: id2} = insert!(:job, sequence: 2)
+
+      assert %{data: [%{id: ^id2}, %{id: ^id1}]} = Jobs.paginate_jobs(TestRepo, 100, 1)
+
+      assert %{data: [%{id: ^id1}, %{id: ^id2}]} =
+               Jobs.paginate_jobs(TestRepo, 100, 1, order_by_fields: [asc: :sequence])
+    end
+
+    test "filters" do
+      insert!(:job, done_at: utc_now())
+
+      assert %{data: [], total: 0} =
+               Jobs.paginate_jobs(TestRepo, 100, 1, filters: [available?: true])
+
+      insert!(:job, attempts: 3, max_attempts: 3)
+
+      assert %{data: [], total: 0} =
+               Jobs.paginate_jobs(TestRepo, 100, 1, filters: [available?: true])
+
+      %{id: id} = job = insert!(:job)
+
+      [
+        [id: job.id],
+        [scope: job.scope],
+        [queue: job.queue],
+        [action: job.action],
+        [available?: true]
+      ]
+      |> Enum.each(fn filter ->
+        assert %{data: [%{id: ^id}], total: 1} =
+                 Jobs.paginate_jobs(TestRepo, 100, 1, filters: filter)
+      end)
+
+      [
+        [id: uuid()],
+        [scope: "wrong"],
+        [queue: "wrong"],
+        [action: "wrong"]
+      ]
+      |> Enum.each(fn filter ->
+        assert %{data: [], total: 0} = Jobs.paginate_jobs(TestRepo, 100, 1, filters: filter)
+      end)
+    end
+
+    test "search_query" do
+      %{id: id} = job = insert!(:job, params: %{a: "param_a"})
+
+      [job.scope, job.queue, job.action, "param_a"]
+      |> Enum.each(fn search_query ->
+        assert %{data: [%{id: ^id}], total: 1} =
+                 Jobs.paginate_jobs(TestRepo, 100, 1, search_query: search_query)
+      end)
+
+      assert %{data: [], total: 0} = Jobs.paginate_jobs(TestRepo, 100, 1, search_query: "wrong")
+    end
+  end
+
+  describe "list_jobs/2" do
+    test "returns a list of the jobs" do
+      %{id: id} = insert!(:job)
+
+      assert [%Job{id: ^id}] = Jobs.list_jobs(TestRepo)
+    end
+
+    test "order_by" do
+      %{id: id1} = insert!(:job, sequence: 1)
+      %{id: id2} = insert!(:job, sequence: 2)
+
+      assert [%{id: ^id2}, %{id: ^id1}] = Jobs.list_jobs(TestRepo)
+
+      assert [%{id: ^id1}, %{id: ^id2}] =
+               Jobs.list_jobs(TestRepo, order_by_fields: [asc: :sequence])
+    end
+
+    test "filters" do
+      insert!(:job, done_at: utc_now())
+
+      assert Jobs.list_jobs(TestRepo, filters: [available?: true]) == []
+
+      insert!(:job, attempts: 1, max_attempts: 1)
+
+      assert Jobs.list_jobs(TestRepo, filters: [available?: true]) == []
+
+      %{id: id} = job = insert!(:job)
+
+      [
+        [id: job.id],
+        [scope: job.scope],
+        [queue: job.queue],
+        [action: job.action],
+        [available?: true]
+      ]
+      |> Enum.each(fn filter ->
+        assert [%{id: ^id}] = Jobs.list_jobs(TestRepo, filters: filter)
+      end)
+
+      [
+        [id: uuid()],
+        [scope: "wrong"],
+        [queue: "wrong"],
+        [action: "wrong"]
+      ]
+      |> Enum.each(fn filter ->
+        assert Jobs.list_jobs(TestRepo, filters: filter) == []
+      end)
+    end
+
+    test "search_query" do
+      %{id: id} = job = insert!(:job, params: %{a: "param_a"})
+
+      [job.scope, job.queue, job.action, "param_a"]
+      |> Enum.each(fn search_query ->
+        assert [%{id: ^id}] = Jobs.list_jobs(TestRepo, search_query: search_query)
+      end)
+
+      assert Jobs.list_jobs(TestRepo, search_query: "wrong") == []
+    end
+  end
+
+  describe "cleanup_completed_jobs/3" do
+    test "deletes old completed jobs" do
+      scope = "test_scope"
+
+      old_job = insert!(:job, scope: scope, done_at: utc_now() |> add(-8, :day))
+      recent_job = insert!(:job, scope: scope, done_at: utc_now() |> add(-6, :day))
+      pending_job = insert!(:job, scope: scope, done_at: nil)
+
+      assert {1, nil} = Jobs.cleanup_completed_jobs(TestRepo, scope)
+
+      assert is_nil(TestRepo.get(Job, old_job.id))
+      assert TestRepo.get(Job, recent_job.id)
+      assert TestRepo.get(Job, pending_job.id)
+    end
+
+    test "respects custom retention" do
+      scope = "test_scope"
+
+      old_job = insert!(:job, scope: scope, done_at: utc_now() |> add(-3, :day))
+
+      assert {1, nil} = Jobs.cleanup_completed_jobs(TestRepo, scope, {2, :day})
+      assert is_nil(TestRepo.get(Job, old_job.id))
+    end
+
+    test "only touches own scope" do
+      old_job_a = insert!(:job, scope: "a", done_at: utc_now() |> add(-8, :day))
+      old_job_b = insert!(:job, scope: "b", done_at: utc_now() |> add(-8, :day))
+
+      assert {1, nil} = Jobs.cleanup_completed_jobs(TestRepo, "a")
+
+      assert is_nil(TestRepo.get(Job, old_job_a.id))
+      assert TestRepo.get(Job, old_job_b.id)
+    end
+  end
+end

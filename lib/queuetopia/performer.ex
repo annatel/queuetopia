@@ -2,7 +2,7 @@ defmodule Queuetopia.Performer do
   @moduledoc """
   The behaviour for a Queuetopia performer.
   """
-  alias Queuetopia.Queue.Job
+  alias Queuetopia.Jobs.Job
 
   @doc """
   Callback invoked by the Queuetopia to perfom a job.
@@ -17,7 +17,7 @@ defmodule Queuetopia.Performer do
     quote do
       @behaviour Queuetopia.Performer
 
-      alias Queuetopia.Queue.Job
+      alias Queuetopia.Jobs.Job
       alias AntlUtilsElixir.Math
 
       @impl Queuetopia.Performer
